@@ -19,10 +19,11 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 | Markup | header/banner, canvas, side panel (die + roster + rule pills), settings & win modals |
 | Constants & geometry | `TRACK` (52 cells, built from segments), `START` offsets, `SAFE`/`STARS` sets, `homeCell()`, base slot coords |
 | Settings | persisted to `localStorage` (`ludo-settings`) |
-| Game state | `game{order, turn, tokens, die, phase, actions, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
-| Rules engine | `pathFor()`, `legalActions()`, `isWallCell()`, `resolveLanding()` — pure-ish, occupancy-based |
-| Turn engine | state machine `idle → rolling → choosing → animating → (next turn / extra roll / over)` |
-| AI | heuristic scorer over legal actions (`aiScore`) |
+| Game state | `game{order, turn, tokens, dice, selDie, phase, allowed, mustCapture, gen, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
+| Rules engine | `pathFor()`, `legalActionsFor()`, `isWallCell()`, `resolveLanding()` — explicit-state (first arg is a tokens array) so they run on clones for simulation |
+| Forced-capture search | `captureReachable()` DFS over dice-dispatch sequences on cloned state; `computeAllowed()` filters `{die, act}` pairs that would forfeit a reachable capture |
+| Turn engine | `idle → rolling (repeat while 6s) → dispatch (one die at a time) → animating → next turn`; all timers go through `later()`, which no-ops if `game.gen` changed (so New Game can't be corrupted by stale callbacks) |
+| AI | heuristic scorer over allowed pairs (`aiScore`) |
 | Sound | Web Audio oscillator synth (`tone()` + `sfx` presets), no audio files |
 | Rendering | `draw()` on a continuous rAF loop; token slide animation steps cell-by-cell |
 | Input | canvas pointer hit-testing against actionable tokens |
@@ -43,14 +44,23 @@ Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber,
 
 ## Rules
 
-### Classic core
-- Roll one die per turn. Roll a **6** to bring a token out of base; a 6 always grants an
-  extra roll. No three-sixes penalty.
+### Classic core (with house turn structure)
+- **Roll-all-first**: a turn starts with a rolling phase. Rolling a 6 means roll again;
+  rolling continues until a non-6 lands. All rolled values form a **dice queue**
+  (e.g. 6, 6, 3). Only then does the player dispatch them — one move per die, any order,
+  any tokens. A 6 die can be spent to deploy from base (or free a prisoner). No
+  three-sixes penalty. Unusable dice are forfeited; the turn ends when no die can be spent.
+- **Captures are mandatory**: if ANY way of dispatching the queue leads to a capture —
+  including chaining several dice onto one token — the player must take a capturing
+  route. Dispatches that would forfeit every reachable capture are illegal (the UI dims
+  them and explains). Capturing **once** lifts the obligation for the rest of the turn;
+  with several capture options the player picks freely.
 - Tokens race clockwise around the 52-square track, then up their colored home column.
 - Landing on a **single** opponent token captures it (back to its base — or jail, see
   Prisoner rule). No capture on safe squares (entries + stars). Landing on a square with
   2+ opponent tokens captures nothing (tokens coexist).
-- No exact roll needed to finish. First player with all 4 tokens home wins; game ends.
+- No exact roll needed to finish. Games can be played with **2 or 4 tokens** per player
+  (settings). First player with all tokens home wins; game ends.
 
 ### Custom rule 1 — Prisoner (toggle, default off)
 A captured token does **not** return to its owner's base — it is held caged beside the

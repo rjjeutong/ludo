@@ -63,6 +63,7 @@ h1 .spark{color:var(--gold);-webkit-text-fill-color:var(--gold);font-size:.5em;v
   flex:1;display:flex;align-items:center;gap:10px;min-width:0;
   font-weight:700;font-size:clamp(13px,2.4vw,16px);color:var(--text-dim);
 }
+.banner.warn .msg{color:var(--gold)}
 .banner .chip{
   width:14px;height:14px;border-radius:50%;flex:none;
   box-shadow:0 0 10px 1px currentColor;background:currentColor;
@@ -116,7 +117,7 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
   100%{transform:rotate(360deg) scale(1)}
 }
 .die.rolling{animation:tumble .62s ease-in-out}
-.roll-info{display:flex;flex-direction:column;gap:6px;min-width:0}
+.roll-info{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
 .btn{
   font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.04em;
   padding:9px 18px;border-radius:13px;border:1px solid rgba(255,255,255,.14);cursor:pointer;
@@ -133,7 +134,22 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
   border:1px solid var(--panel-edge);box-shadow:none;
 }
 .btn.ghost:hover:not(:disabled){color:var(--text)}
+.btn.pulse{animation:btnpulse 1.1s ease-in-out infinite}
+@keyframes btnpulse{0%,100%{box-shadow:0 5px 16px -4px rgba(246,184,60,.55)}50%{box-shadow:0 5px 26px 0 rgba(246,184,60,.85)}}
 .hint{font-size:12.5px;color:var(--text-faint);line-height:1.35}
+.hint.warn{color:var(--gold);font-weight:700}
+/* pending dice queue */
+.dice-queue{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px;min-height:0}
+.dice-queue:empty{display:none}
+.dchip{
+  width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  font-family:var(--font-display);font-weight:800;font-size:18px;color:var(--ink);
+  background:linear-gradient(150deg,#fdfbff,#cfc8ee);
+  box-shadow:0 3px 8px rgba(0,0,0,.45), inset 0 -2px 4px rgba(60,40,120,.2), inset 0 1px 2px #fff;
+  cursor:pointer;border:2px solid transparent;transition:all .15s ease;position:relative;
+}
+.dchip.sel{border-color:var(--gold);box-shadow:0 0 14px -2px var(--gold), 0 3px 8px rgba(0,0,0,.45);transform:translateY(-2px)}
+.dchip.dead{opacity:.32;cursor:default;transform:none}
 .roster{display:flex;flex-direction:column;gap:8px}
 .prow{
   display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:13px;
@@ -169,11 +185,12 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
 .pills{display:flex;flex-wrap:wrap;gap:6px}
 .pill{
   font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
-  padding:4px 10px;border-radius:99px;color:var(--text-dim);
+  padding:4px 10px;border-radius:99px;color:var(--text-faint);
   border:1px dashed var(--panel-edge);
 }
-.pill.on{color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 45%,transparent);
-  background:color-mix(in srgb,var(--gold) 10%,transparent)}
+.pill.on{color:var(--ink);border:1px solid var(--gold);
+  background:linear-gradient(180deg,#ffe9bd,var(--gold));
+  box-shadow:0 0 14px -4px var(--gold)}
 /* ---------- overlays / modals ---------- */
 .overlay{
   position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;
@@ -247,19 +264,22 @@ footer a{color:var(--text-dim)}
 
 <header>
   <h1>LUDO<span class="spark"> ✦</span></h1>
-  <div class="banner"><span class="chip" id="turnChip"></span><span class="msg" id="turnMsg">Loading…</span></div>
+  <div class="banner" id="banner"><span class="chip" id="turnChip"></span><span class="msg" id="turnMsg">Loading…</span></div>
   <button class="iconbtn" id="gearBtn" title="Settings" aria-label="Settings">⚙</button>
 </header>
 
 <main class="layout">
   <div class="board-wrap"><canvas id="board"></canvas></div>
   <aside class="panel">
-    <div class="card die-zone">
-      <div class="die disabled" id="die" title="Die"></div>
-      <div class="roll-info">
-        <button class="btn" id="rollBtn" disabled>Roll</button>
-        <div class="hint" id="rollHint">Roll a 6 to leave base.</div>
+    <div class="card">
+      <div class="die-zone">
+        <div class="die disabled" id="die" title="Die"></div>
+        <div class="roll-info">
+          <button class="btn" id="rollBtn" disabled>Roll</button>
+          <div class="hint" id="rollHint">Roll a 6 to leave base.</div>
+        </div>
       </div>
+      <div class="dice-queue" id="diceQueue"></div>
     </div>
     <div class="card">
       <div class="roster" id="roster"></div>
@@ -273,14 +293,14 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all four tokens home wins · <a href="#" id="rulesLink">rules</a></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a></footer>
 <div id="toast"></div>
 
 <!-- settings -->
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <h2>Settings</h2>
-    <p class="sub">Rule changes apply immediately. Opponent count starts a new game.</p>
+    <p class="sub">Rule changes apply immediately. Opponents and token count start a new game.</p>
     <div class="setting">
       <div class="lab"><b>AI opponents</b><span>You always play Crimson.</span></div>
       <div class="seg" id="aiSeg">
@@ -288,7 +308,13 @@ footer a{color:var(--text-dim)}
       </div>
     </div>
     <div class="setting">
-      <div class="lab"><b>Prisoner rule</b><span>Captured tokens are caged beside the capturer's base. Roll a 6 to free one (that 6 is spent).</span></div>
+      <div class="lab"><b>Tokens per player</b><span>Shorter games with 2.</span></div>
+      <div class="seg" id="tokSeg">
+        <button data-n="2">2</button><button data-n="4">4</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Prisoner rule</b><span>Captured tokens are caged beside the capturer's base. Spend a rolled 6 to free one.</span></div>
       <label class="toggle"><input type="checkbox" id="optPrisoner"><span class="tr"></span><span class="th"></span></label>
     </div>
     <div class="setting">
@@ -323,8 +349,9 @@ footer a{color:var(--text-dim)}
 /* =========================================================================
    LUDO — Night Carnival
    Single-file game. Sections: constants/geometry · settings · state ·
-   rules engine · turn engine (seat controllers) · AI · sound · render ·
-   input · UI/modals · boot.
+   rules engine (explicit-state, simulation-friendly) · forced-capture
+   search · turn engine (roll-all-first, dice queue, seat controllers) ·
+   AI · sound · render · input · UI/modals · boot.
    ========================================================================= */
 
 /* ---------- constants & geometry ---------- */
@@ -353,27 +380,36 @@ function homeCell(p,h){              // home-column cells, h = 0..4 (5th step = 
     case 3: return {c:13-h, r:7};
   }
 }
-const BASE_SLOTS = [[2,2],[4,2],[2,4],[4,4]];    // token nests inside each 6×6 base
+const SLOT_SETS = {2:[[2,3],[4,3]], 4:[[2,2],[4,2],[2,4],[4,4]]};
 const relOf = (p,abs)=>(abs-START[p]+52)%52;
 const absOf = (p,rel)=>(START[p]+rel)%52;
 
 /* ---------- settings (persisted) ---------- */
 const settings = Object.assign(
-  {aiCount:3, prisoner:false, wall:false, sound:true},
+  {aiCount:3, tokenCount:4, prisoner:false, wall:false, sound:true},
   JSON.parse(localStorage.getItem('ludo-settings')||'{}')
 );
 const saveSettings = ()=>localStorage.setItem('ludo-settings', JSON.stringify(settings));
+const baseSlots = ()=>SLOT_SETS[settings.tokenCount]||SLOT_SETS[4];
 
 /* ---------- game state ---------- */
 const game = {
-  order:[],        // active seat indices, turn order (clockwise)
-  turn:0,          // index into order
-  tokens:[],       // all tokens of active seats
-  die:null,
-  phase:'idle',    // idle | rolling | choosing | animating | over
-  actions:[],      // legal actions for the current roll
+  order:[],          // active seat indices, turn order (clockwise)
+  turn:0,            // index into order
+  tokens:[],
+  dice:[],           // pending dice for this turn (roll-all-first)
+  lastRoll:null,
+  selDie:null,       // die value the human has selected to spend
+  phase:'idle',      // idle (may roll) | rolling | dispatch | animating | over
+  allowed:[],        // allowed {die, act} pairs (forced-capture filtered)
+  blockedIds:new Set(), // tokens legal-but-forbidden by the capture obligation
+  mustCapture:false,
+  capturedThisTurn:false,
   winner:null,
+  gen:0,             // bumped by newGame so stale timers can't touch a fresh game
 };
+// schedule a callback that dies silently if a new game started meanwhile
+function later(fn, ms){ const g=game.gen; setTimeout(()=>{ if(g===game.gen) fn(); }, ms); }
 const seatActive = p => game.order.includes(p);
 const curSeat = ()=> game.order[game.turn];
 // Seat controllers: 'human' | 'ai'. Pass-and-play = more 'human' seats;
@@ -387,35 +423,38 @@ function newGame(){
   for(let p=0;p<4;p++) controllers[p] = (p===0?'human':'ai');
   game.tokens = [];
   for(const p of game.order)
-    for(let s=0;s<4;s++)
+    for(let s=0;s<settings.tokenCount;s++)
       game.tokens.push({id:`${p}-${s}`, seat:p, slot:s, state:'base', trackIdx:-1, homeIdx:-1, heldBy:-1});
-  game.turn=0; game.die=null; game.phase='idle'; game.actions=[]; game.winner=null;
+  game.turn=0; game.dice=[]; game.lastRoll=null; game.selDie=null;
+  game.phase='idle'; game.allowed=[]; game.blockedIds=new Set();
+  game.mustCapture=false; game.capturedThisTurn=false; game.winner=null;
+  game.gen++;
   anim=null; effects.length=0;
   hideOverlay(winOverlay);
-  updateRoster(); updatePills();
+  updateRoster(); updatePills(); updateDiceQueue();
   startTurn();
 }
 const tokensOf = p => game.tokens.filter(t=>t.seat===p);
 const jailedBy = p => game.tokens.filter(t=>t.state==='jail' && t.heldBy===p);
+const tokenById = id => game.tokens.find(t=>t.id===id);
 
-/* ---------- rules engine (pure-ish helpers) ---------- */
-function tokensAtTrack(idx, except){
-  return game.tokens.filter(t=>t!==except && t.state==='track' && t.trackIdx===idx);
+/* ---------- rules engine (explicit state, usable on clones) ---------- */
+function tokensAtTrack(toks, idx, except){
+  return toks.filter(t=>t!==except && t.state==='track' && t.trackIdx===idx);
 }
-function tokensAtHome(p,h){
-  return game.tokens.filter(t=>t.state==='home' && t.seat===p && t.homeIdx===h);
+function tokensAtHome(toks, p, h, except){
+  return toks.filter(t=>t!==except && t.state==='home' && t.seat===p && t.homeIdx===h);
 }
-function isWallCell(cell, except){   // ≥2 same-color tokens ⇒ wall (wall rule only)
-  let list;
-  if(cell.kind==='track') list = tokensAtTrack(cell.idx, except);
-  else list = tokensAtHome(cell.p, cell.h).filter(t=>t!==except);
+function isWallCell(toks, cell, except){   // ≥2 same-color tokens ⇒ wall (wall rule only)
+  const list = cell.kind==='track' ? tokensAtTrack(toks, cell.idx, except)
+                                   : tokensAtHome(toks, cell.p, cell.h, except);
   const byCol={};
   for(const t of list){ byCol[t.seat]=(byCol[t.seat]||0)+1; if(byCol[t.seat]>=2) return true; }
   return false;
 }
 // Path of cells a token steps through for `roll`. Last cell is the destination
 // ({kind:'done'} when the token finishes — overshoot allowed). null = illegal.
-function pathFor(tok, roll){
+function pathFor(toks, tok, roll){
   const p = tok.seat, cells = [];
   if(tok.state==='track'){
     const rel = relOf(p, tok.trackIdx);
@@ -431,36 +470,104 @@ function pathFor(tok, roll){
     }
   } else return null;
   if(settings.wall){
-    for(const c of cells) if(c.kind!=='done' && isWallCell(c, tok)) return null;
+    for(const c of cells) if(c.kind!=='done' && isWallCell(toks, c, tok)) return null;
   }
   return cells;
 }
 // Serializable actions — {type:'enter'|'move'|'free', t:tokenId} — so a future
 // online mode can transmit and replay them verbatim.
-function legalActions(p, roll){
+function legalActionsFor(toks, p, die){
   const acts=[];
-  for(const tok of tokensOf(p)){
+  for(const tok of toks){
+    if(tok.seat!==p) continue;
     if(tok.state==='base'){
-      if(roll===6){
+      if(die===6){
         const entry={kind:'track', idx:START[p]};
-        if(!(settings.wall && isWallCell(entry, tok))) acts.push({type:'enter', t:tok.id});
+        if(!(settings.wall && isWallCell(toks, entry, tok))) acts.push({type:'enter', t:tok.id});
       }
     } else if(tok.state==='jail'){
-      if(roll===6 && settings.prisoner) acts.push({type:'free', t:tok.id});
+      if(die===6 && settings.prisoner) acts.push({type:'free', t:tok.id});
     } else if(tok.state==='track' || tok.state==='home'){
-      const path = pathFor(tok, roll);
+      const path = pathFor(toks, tok, die);
       if(path) acts.push({type:'move', t:tok.id, path});
     }
   }
   return acts;
 }
-const tokenById = id => game.tokens.find(t=>t.id===id);
+// The lone opponent token this action would capture, or null.
+function actionCaptureVictim(toks, p, act){
+  if(act.type!=='move') return null;          // entry squares are safe
+  const last = act.path[act.path.length-1];
+  if(last.kind!=='track' || SAFE.has(last.idx)) return null;
+  const mover = toks.find(t=>t.id===act.t);
+  const enemies = tokensAtTrack(toks, last.idx, mover).filter(t=>t.seat!==p);
+  return enemies.length===1 ? enemies[0] : null;
+}
+
+/* ---------- forced-capture search ---------- */
+function cloneToks(toks){ return toks.map(t=>({...t})); }
+function applySim(toks, p, act){             // mutate a sim clone; victims just leave the square
+  const tok = toks.find(t=>t.id===act.t);
+  if(act.type==='enter'){ tok.state='track'; tok.trackIdx=START[p]; return; }
+  if(act.type==='free'){ tok.state='base'; tok.heldBy=-1; return; }
+  const victim = actionCaptureVictim(toks, p, act);
+  const last = act.path[act.path.length-1];
+  if(last.kind==='done'){ tok.state='done'; tok.trackIdx=-1; tok.homeIdx=-1; }
+  else if(last.kind==='home'){ tok.state='home'; tok.homeIdx=last.h; tok.trackIdx=-1; }
+  else { tok.state='track'; tok.trackIdx=last.idx; }
+  if(victim){ victim.state='base'; victim.trackIdx=-1; }
+}
+const diceMinus = (dice,d)=>{ const i=dice.indexOf(d); return dice.slice(0,i).concat(dice.slice(i+1)); };
+// True if ANY way of dispatching `dice` from this position includes a capture.
+function captureReachable(toks, p, dice){
+  for(const d of new Set(dice)){
+    for(const act of legalActionsFor(toks, p, d)){
+      if(actionCaptureVictim(toks, p, act)) return true;
+      const rest = diceMinus(dice, d);
+      if(!rest.length) continue;
+      const t2 = cloneToks(toks);
+      applySim(t2, p, act);
+      if(captureReachable(t2, p, rest)) return true;
+    }
+  }
+  return false;
+}
+// All spendable {die, act} pairs right now, restricted so the player can never
+// dispatch in a way that forfeits a reachable capture (until one is made).
+function computeAllowed(){
+  const p = curSeat(), toks = game.tokens;
+  let pairs = [];
+  for(const d of new Set(game.dice))
+    for(const act of legalActionsFor(toks, p, d)) pairs.push({die:d, act});
+  game.mustCapture = false;
+  game.blockedIds = new Set();
+  if(!game.capturedThisTurn && pairs.length &&
+     captureReachable(cloneToks(toks), p, game.dice)){
+    game.mustCapture = true;
+    const ok = pairs.filter(pr=>{
+      if(actionCaptureVictim(toks, p, pr.act)) return true;
+      const rest = diceMinus(game.dice, pr.die);
+      if(!rest.length) return false;
+      const t2 = cloneToks(toks);
+      applySim(t2, p, pr.act);
+      return captureReachable(t2, p, rest);
+    });
+    for(const pr of pairs) if(!ok.includes(pr)) game.blockedIds.add(pr.act.t);
+    for(const pr of ok) game.blockedIds.delete(pr.act.t);
+    pairs = ok;
+  }
+  game.allowed = pairs;
+}
+const pairCaptures = pr => !!actionCaptureVictim(game.tokens, curSeat(), pr.act);
 
 /* ---------- turn engine ---------- */
 function startTurn(){
-  game.die=null; game.phase='idle'; game.actions=[];
-  updateRoster(); updateBanner(); updateDie();
-  if(isAI(curSeat())) setTimeout(()=>{ if(game.phase==='idle') doRoll(); }, 800);
+  game.dice=[]; game.lastRoll=null; game.selDie=null;
+  game.allowed=[]; game.blockedIds=new Set();
+  game.mustCapture=false; game.capturedThisTurn=false;
+  game.phase='idle';
+  updateRoster(); updateBanner(); updateDie(); updateDiceQueue();
+  if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 800);
 }
 function doRoll(){
   if(game.phase!=='idle') return;
@@ -471,47 +578,60 @@ function doRoll(){
   dieEl.classList.add('rolling');
   let flicks = 0;
   const flick = setInterval(()=>{ setDieFace(1+Math.floor(Math.random()*6)); if(++flicks>6) clearInterval(flick); }, 80);
-  setTimeout(()=>{
+  later(()=>{
     clearInterval(flick);
     dieEl.classList.remove('rolling');
-    game.die = v; setDieFace(v);
-    if(v===6) sfx.six();
-    afterRoll();
+    game.lastRoll = v; setDieFace(v);
+    game.dice.push(v);
+    updateDiceQueue();
+    if(v===6){
+      sfx.six();
+      game.phase='idle';                       // a 6 means: roll again before moving
+      updateDie(); updateBanner();
+      if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 700);
+      else toast('A 6! Roll again — you move after the rolling stops');
+    } else {
+      beginDispatch();
+    }
   }, 640);
 }
-function afterRoll(){
+function beginDispatch(){
   const p = curSeat();
-  game.actions = legalActions(p, game.die);
-  updateRoster();
-  if(game.actions.length===0){
+  game.phase='dispatch';
+  computeAllowed();
+  updateDiceQueue(); updateBanner(); updateDie(); updateRoster();
+  if(game.allowed.length===0){
     game.phase='animating';
-    toast(`${seatName(p)} — no moves`);
-    sfx.noMove();
-    setTimeout(endOfAction, 950);
+    if(game.dice.length) { toast(`${seatName(p)} — no moves left`); sfx.noMove(); }
+    later(endTurn, 900);
     return;
   }
-  game.phase='choosing';
-  updateBanner();
-  if(isAI(p)) setTimeout(()=>performAction(aiPick(p, game.actions)), 560);
-  else if(settings.prisoner && game.die===6 && game.actions.some(a=>a.type==='free'))
-    toast('You rolled a 6 — move, deploy, or free a prisoner');
+  // default die selection: first pending die that still has an allowed pair
+  if(game.selDie==null || !game.allowed.some(pr=>pr.die===game.selDie))
+    game.selDie = game.dice.find(d=>game.allowed.some(pr=>pr.die===d)) ?? null;
+  updateDiceQueue();
+  if(isAI(p)) later(()=>{ if(game.phase==='dispatch') performPair(aiPick(p, game.allowed)); }, 560);
+  else if(game.mustCapture) toast('⚔ Capture is mandatory — capturing routes stay lit');
 }
-function performAction(act){
-  if(game.phase!=='choosing') return;
-  game.phase='animating'; game.actions=[];
-  const tok = tokenById(act.t), p = tok.seat;
+function performPair(pr){
+  if(game.phase!=='dispatch' || !pr) return;
+  game.phase='animating';
+  game.dice.splice(game.dice.indexOf(pr.die), 1);
+  game.allowed=[]; game.blockedIds=new Set();
+  updateDiceQueue();
+  const act = pr.act, tok = tokenById(act.t), p = tok.seat;
   if(act.type==='enter'){
     const from = tokenXY(tok);
     tok.state='track'; tok.trackIdx=START[p]; tok.homeIdx=-1;
     sfx.enter();
-    animate(tok, [from, cellXY({kind:'track', idx:START[p]})], ()=>{ resolveLanding(tok); finishAction(); });
+    animate(tok, [from, cellXY({kind:'track', idx:START[p]})], ()=>{ resolveLanding(tok); finishStep(); });
   } else if(act.type==='free'){
     const from = tokenXY(tok);
     tok.state='base'; tok.heldBy=-1; tok.trackIdx=-1; tok.homeIdx=-1;
     sfx.free();
     toast(`${seatName(p)} freed a prisoner`);
-    animate(tok, [from, tokenXY(tok)], finishAction);
-  } else { // move
+    animate(tok, [from, tokenXY(tok)], finishStep);
+  } else {
     const from = tokenXY(tok);
     const path = act.path;
     const pts = [from, ...path.map(c=>cellXY(c))];
@@ -526,16 +646,17 @@ function performAction(act){
         sfx.finish(); ping(cellXY({kind:'done'}), '#ffd479');
         toast(`${seatName(p)} brought a token home!`);
       }
-      finishAction();
+      finishStep();
     });
   }
 }
 function resolveLanding(tok){
   const idx = tok.trackIdx;
   if(SAFE.has(idx)) return;
-  const enemies = tokensAtTrack(idx, tok).filter(t=>t.seat!==tok.seat);
+  const enemies = tokensAtTrack(game.tokens, idx, tok).filter(t=>t.seat!==tok.seat);
   if(enemies.length!==1) return;          // only a lone opponent token is captured
   const victim = enemies[0];
+  game.capturedThisTurn = true;
   ping(cellXY({kind:'track', idx}), SEATS[victim.seat].main);
   if(settings.prisoner){
     victim.state='jail'; victim.heldBy=tok.seat; victim.trackIdx=-1;
@@ -547,25 +668,25 @@ function resolveLanding(tok){
     toast(`${seatName(tok.seat)} captured ${seatName(victim.seat)}!`);
   }
 }
-function finishAction(){
+function finishStep(){
   const p = curSeat();
   if(tokensOf(p).every(t=>t.state==='done')){
     game.winner=p; game.phase='over';
-    updateRoster(); updateBanner();
-    setTimeout(showWin, 700);
+    updateRoster(); updateBanner(); updateDiceQueue();
+    later(showWin, 700);
     return;
   }
   updateRoster();
-  endOfAction();
+  if(game.dice.length){ beginDispatch(); return; }
+  endTurn();
 }
-function endOfAction(){
+function endTurn(){
   if(game.winner!=null) return;
-  if(game.die===6){ startTurn(); return; }   // extra roll on a 6, same seat
   game.turn = (game.turn+1) % game.order.length;
   startTurn();
 }
 
-/* ---------- AI (heuristic scoring over legal actions) ---------- */
+/* ---------- AI (heuristic scoring over allowed pairs) ---------- */
 function dangerAt(p, absIdx){
   if(SAFE.has(absIdx)) return 0;
   let d=0;
@@ -576,17 +697,17 @@ function dangerAt(p, absIdx){
   }
   return d;
 }
-function aiPick(p, acts){
+function aiPick(p, pairs){
   let best=null, bestScore=-1e9;
-  for(const a of acts){
-    const s = aiScore(p, a);
-    if(s>bestScore){ bestScore=s; best=a; }
+  for(const pr of pairs){
+    const s = aiScore(p, pr.act);
+    if(s>bestScore){ bestScore=s; best=pr; }
   }
   return best;
 }
 function aiScore(p, act){
   const jitter = Math.random()*2;
-  if(act.type==='free')  return 30 + 4*jailedBy(0).length*0 + jitter + (tokensOf(p).filter(t=>t.state==='jail').length>1?6:0);
+  if(act.type==='free')  return 30 + jitter + (tokensOf(p).filter(t=>t.state==='jail').length>1?6:0);
   if(act.type==='enter') return 26 + jitter;
   const tok = tokenById(act.t);
   const last = act.path[act.path.length-1];
@@ -595,9 +716,9 @@ function aiScore(p, act){
   if(last.kind==='done') return s+42;
   if(last.kind==='home') return s + (tok.state==='track'?26:10) + last.h;
   const dest = last.idx;
-  const enemies = tokensAtTrack(dest, tok).filter(t=>t.seat!==p);
-  if(enemies.length===1 && !SAFE.has(dest)){
-    const vRel = relOf(enemies[0].seat, enemies[0].trackIdx);
+  const victim = actionCaptureVictim(game.tokens, p, act);
+  if(victim){
+    const vRel = relOf(victim.seat, victim.trackIdx);
     s += 40 + vRel*0.25 + (settings.prisoner?12:0);  // jailing hurts more
   }
   if(SAFE.has(dest)) s += 10;
@@ -605,9 +726,9 @@ function aiScore(p, act){
   const dNew = dangerAt(p, dest);
   s -= dNew*11 + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
   if(settings.wall){
-    const own = tokensAtTrack(dest, tok).filter(t=>t.seat===p);
+    const own = tokensAtTrack(game.tokens, dest, tok).filter(t=>t.seat===p);
     if(own.length===1) s += 7;                       // forming a wall
-    if(tok.state==='track' && tokensAtTrack(tok.trackIdx, tok).some(t=>t.seat===p)) s -= 3; // breaking one
+    if(tok.state==='track' && tokensAtTrack(game.tokens, tok.trackIdx, tok).some(t=>t.seat===p)) s -= 3; // breaking one
   }
   return s;
 }
@@ -668,12 +789,12 @@ function cellXY(cell){
   return {x:px(7), y:px(7)};         // done -> board center
 }
 function baseSlotXY(p, slot){
-  const b=SEATS[p].base, s=BASE_SLOTS[slot];
+  const b=SEATS[p].base, s=baseSlots()[slot]||baseSlots()[0];
   return {x:px(b.c+s[0]), y:px(b.r+s[1])};
 }
 function jailSpotXY(holder, k){
   const b=SEATS[holder].base;
-  return {x:px(b.c+1)+k*S*0.95, y:px(b.r+5)-S*0.45+ (holder===1||holder===2 ? 0 : 0)};
+  return {x:px(b.c+1)+k*S*0.95, y:px(b.r+5)-S*0.45};
 }
 function tokenXY(tok){               // logical screen position (incl. stack fan)
   if(tok.state==='base') return baseSlotXY(tok.seat, tok.slot);
@@ -682,13 +803,12 @@ function tokenXY(tok){               // logical screen position (incl. stack fan
     return jailSpotXY(tok.heldBy, Math.max(0,k));
   }
   if(tok.state==='done'){
-    const b=SEATS[tok.seat].base, d=SEATS[tok.seat].dir;
-    return {x:px(7)+d.dx*0+ (tok.seat===1?-S*.85:tok.seat===3?S*.85:((tok.slot%2)-.5)*S*.7),
+    return {x:px(7)+ (tok.seat===1?-S*.85:tok.seat===3?S*.85:((tok.slot%2)-.5)*S*.7),
             y:px(7)+ (tok.seat===0?S*.85:tok.seat===2?-S*.85:((tok.slot%2)-.5)*S*.7)};
   }
   let cell, mates;
-  if(tok.state==='track'){ cell=cellXY({kind:'track', idx:tok.trackIdx}); mates=tokensAtTrack(tok.trackIdx).filter(t=>!isAnim(t)); }
-  else { cell=cellXY({kind:'home', p:tok.seat, h:tok.homeIdx}); mates=tokensAtHome(tok.seat,tok.homeIdx).filter(t=>!isAnim(t)); }
+  if(tok.state==='track'){ cell=cellXY({kind:'track', idx:tok.trackIdx}); mates=tokensAtTrack(game.tokens, tok.trackIdx).filter(t=>!isAnim(t)); }
+  else { cell=cellXY({kind:'home', p:tok.seat, h:tok.homeIdx}); mates=tokensAtHome(game.tokens, tok.seat, tok.homeIdx).filter(t=>!isAnim(t)); }
   if(mates.length<=1) return cell;
   const i = mates.indexOf(tok);
   const off = (i-(mates.length-1)/2)*S*0.22;
@@ -773,7 +893,7 @@ function drawBases(){
     ctx.fillStyle='rgba(13,10,28,.78)'; ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; ctx.stroke();
     // nests
-    for(const s of BASE_SLOTS){
+    for(const s of baseSlots()){
       const x=px(b.c+s[0]), y=px(b.r+s[1]);
       ctx.beginPath(); ctx.arc(x,y,S*0.42,0,Math.PI*2);
       ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fill();
@@ -848,19 +968,34 @@ function drawEffects(now){
 }
 function drawTokens(now){
   const R=S*0.36;
-  const actionable = new Set(game.phase==='choosing' && !isAI(curSeat()) ? game.actions.map(a=>a.t) : []);
+  const humanChoosing = game.phase==='dispatch' && !isAI(curSeat());
+  // tokens spendable with the SELECTED die glow strongest; other dice faintly
+  const selIds = new Set(), otherIds = new Set(), capIds = new Set();
+  if(humanChoosing){
+    for(const pr of game.allowed){
+      (pr.die===game.selDie ? selIds : otherIds).add(pr.act.t);
+      if(pairCaptures(pr)) capIds.add(pr.act.t);
+    }
+  }
   const pulse = 0.5+0.5*Math.sin(now/280);
-  // base + track + home tokens (sorted so lower rows draw later: nicer overlap)
   const sorted=[...game.tokens].sort((a,b)=>tokenXY(a).y-tokenXY(b).y);
   for(const tok of sorted){
     if(isAnim(tok) || tok.state==='jail') continue;
     const {x,y}=tokenXY(tok);
     const Rt = tok.state==='done' ? R*0.55 : R;
-    if(actionable.has(tok.id)){
+    if(capIds.has(tok.id)){           // capture route: double gold ring
+      ctx.beginPath(); ctx.arc(x,y,Rt+6.5+pulse*2.5,0,Math.PI*2);
+      ctx.strokeStyle=hexA('#ffd479', .55+pulse*.4); ctx.lineWidth=2.5; ctx.stroke();
+    }
+    if(selIds.has(tok.id)){
       ctx.beginPath(); ctx.arc(x,y,Rt+3.5+pulse*2.5,0,Math.PI*2);
       ctx.strokeStyle=hexA(SEATS[tok.seat].light, .5+pulse*0.45); ctx.lineWidth=3; ctx.stroke();
+    } else if(otherIds.has(tok.id)){
+      ctx.beginPath(); ctx.arc(x,y,Rt+3.5,0,Math.PI*2);
+      ctx.strokeStyle=hexA(SEATS[tok.seat].light, .25); ctx.lineWidth=2; ctx.stroke();
     }
-    drawToken(x,y,Rt,tok.seat,{alpha: tok.state==='done'?0.95:1});
+    const dimmed = humanChoosing && game.mustCapture && game.blockedIds.has(tok.id);
+    drawToken(x,y,Rt,tok.seat,{alpha: tok.state==='done'?0.95 : dimmed?0.55 : 1});
   }
   // stack count badges
   const counted=new Set();
@@ -868,12 +1003,12 @@ function drawTokens(now){
     if(tok.state!=='track' || isAnim(tok)) continue;
     const key=tok.trackIdx;
     if(counted.has(key)) continue; counted.add(key);
-    const here=tokensAtTrack(key).filter(t=>!isAnim(t));
+    const here=tokensAtTrack(game.tokens, key).filter(t=>!isAnim(t));
     if(here.length>=3){
       const {x,y}=cellXY({kind:'track', idx:key});
       ctx.beginPath(); ctx.arc(x+S*0.3,y-S*0.32,S*0.16,0,Math.PI*2);
       ctx.fillStyle='#16122e'; ctx.fill();
-      ctx.fillStyle='#ffd479'; ctx.font=`800 ${S*0.24}px ${'Nunito'}`;
+      ctx.fillStyle='#ffd479'; ctx.font=`800 ${S*0.24}px Nunito`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(here.length, x+S*0.3, y-S*0.31);
     }
@@ -883,7 +1018,7 @@ function drawTokens(now){
     const js=jailedBy(p);
     js.forEach((tok,k)=>{
       const {x,y}=jailSpotXY(p,k);
-      if(actionable.has(tok.id)){
+      if(selIds.has(tok.id) || otherIds.has(tok.id)){
         ctx.beginPath(); ctx.arc(x,y,S*0.34+pulse*2.5,0,Math.PI*2);
         ctx.strokeStyle=hexA(SEATS[tok.seat].light,.5+pulse*.45); ctx.lineWidth=3; ctx.stroke();
       }
@@ -919,24 +1054,44 @@ function hexA(hex,a){
 function loop(now){ draw(now); requestAnimationFrame(loop); }
 
 /* ---------- input ---------- */
+function pairForToken(tokId){
+  // prefer the selected die; fall back if the token is only spendable with another die
+  const ofTok = game.allowed.filter(pr=>pr.act.t===tokId);
+  if(!ofTok.length) return null;
+  const sel = ofTok.find(pr=>pr.die===game.selDie);
+  if(sel) return sel;
+  const dies = new Set(ofTok.map(pr=>pr.die));
+  if(dies.size===1) return ofTok[0];
+  return 'ambiguous';
+}
 canvas.addEventListener('pointerdown', e=>{
-  if(game.phase!=='choosing' || isAI(curSeat())) return;
+  if(game.phase!=='dispatch' || isAI(curSeat())) return;
   const rect=canvas.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
-  let best=null, bestD=1e9;
-  for(const a of game.actions){
-    const tok=tokenById(a.t), p=tokenXY(tok);
+  let hitId=null, bestD=1e9;
+  const candidates = new Set([...game.allowed.map(pr=>pr.act.t), ...game.blockedIds]);
+  for(const id of candidates){
+    const tok=tokenById(id); if(!tok) continue;
+    const p=tokenXY(tok);
     const d=Math.hypot(p.x-x,p.y-y);
-    if(d<S*0.85 && d<bestD){ best=a; bestD=d; }
+    if(d<S*0.85 && d<bestD){ hitId=id; bestD=d; }
   }
-  if(best) performAction(best);
+  if(!hitId) return;
+  if(game.blockedIds.has(hitId) && !game.allowed.some(pr=>pr.act.t===hitId)){
+    toast('⚔ Capture is mandatory — that move would dodge it');
+    sfx.noMove();
+    return;
+  }
+  const pr = pairForToken(hitId);
+  if(pr==='ambiguous'){ toast('Tap a die first, then the token'); return; }
+  if(pr) performPair(pr);
 });
 canvas.addEventListener('pointermove', e=>{
-  if(game.phase!=='choosing' || isAI(curSeat())){ canvas.style.cursor='default'; return; }
+  if(game.phase!=='dispatch' || isAI(curSeat())){ canvas.style.cursor='default'; return; }
   const rect=canvas.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
-  const hit=game.actions.some(a=>{
-    const p=tokenXY(tokenById(a.t));
+  const hit=game.allowed.some(pr=>{
+    const p=tokenXY(tokenById(pr.act.t));
     return Math.hypot(p.x-x,p.y-y)<S*0.85;
   });
   canvas.style.cursor=hit?'pointer':'default';
@@ -946,9 +1101,11 @@ canvas.addEventListener('pointermove', e=>{
 const dieEl=document.getElementById('die');
 const rollBtn=document.getElementById('rollBtn');
 const rollHint=document.getElementById('rollHint');
+const bannerEl=document.getElementById('banner');
 const turnChip=document.getElementById('turnChip');
 const turnMsg=document.getElementById('turnMsg');
 const rosterEl=document.getElementById('roster');
+const diceQueueEl=document.getElementById('diceQueue');
 const toastEl=document.getElementById('toast');
 const settingsOverlay=document.getElementById('settingsOverlay');
 const winOverlay=document.getElementById('winOverlay');
@@ -962,18 +1119,45 @@ const seatName = p => controllers[p]==='human' ? 'You' : SEATS[p].label;
 function updateDie(){
   const humanIdle = game.phase==='idle' && !isAI(curSeat()) && game.winner==null;
   rollBtn.disabled = !humanIdle;
+  rollBtn.textContent = (humanIdle && game.lastRoll===6) ? 'Roll again!' : 'Roll';
+  rollBtn.classList.toggle('pulse', humanIdle && game.lastRoll===6);
   dieEl.classList.toggle('disabled', !humanIdle);
 }
+function updateDiceQueue(){
+  diceQueueEl.innerHTML='';
+  const human = !isAI(curSeat());
+  game.dice.forEach((d,i)=>{
+    const chip=document.createElement('div');
+    chip.className='dchip';
+    chip.textContent=d;
+    const usable = game.phase!=='dispatch' || game.allowed.some(pr=>pr.die===d);
+    if(!usable) chip.classList.add('dead');
+    if(game.phase==='dispatch' && d===game.selDie &&
+       i===game.dice.indexOf(d)) chip.classList.add('sel');
+    if(human && game.phase==='dispatch' && usable){
+      chip.addEventListener('click', ()=>{ game.selDie=d; updateDiceQueue(); updateBanner(); });
+    }
+    diceQueueEl.appendChild(chip);
+  });
+}
 function updateBanner(){
-  const p=curSeat?.()!=null?curSeat():0;
+  const p=curSeat()??0;
   turnChip.style.color = SEATS[p].main;
-  let msg;
+  let msg, warn=false;
   if(game.winner!=null) msg = `${seatName(game.winner)} won the game!`;
-  else if(isAI(p)) msg = game.phase==='choosing' ? `${seatName(p)} is choosing…` : `${seatName(p)} is rolling…`;
-  else if(game.phase==='choosing') msg = game.actions.length>1 ? 'Your turn — pick a glowing token' : 'Your turn — tap the glowing token';
+  else if(isAI(p)) msg = game.phase==='dispatch' ? `${seatName(p)} is moving…` : `${seatName(p)} is rolling…`;
+  else if(game.phase==='dispatch'){
+    if(game.mustCapture){ msg = '⚔ Capture is mandatory — use a lit token'; warn=true; }
+    else msg = game.dice.length>1 ? `Spend your dice (${game.dice.join(', ')}) — tap a die, then a token` : 'Your move — tap a glowing token';
+  }
+  else if(game.lastRoll===6 && game.phase==='idle') { msg='A 6! Roll again'; warn=true; }
   else msg = 'Your turn — roll the die!';
   turnMsg.textContent=msg;
-  rollHint.textContent = game.die!=null ? `Rolled a ${game.die}${game.die===6?' — roll again after moving!':''}` : 'Roll a 6 to leave base.';
+  bannerEl.classList.toggle('warn', warn);
+  rollHint.classList.toggle('warn', game.mustCapture && !isAI(p) && game.phase==='dispatch');
+  if(game.mustCapture && !isAI(p) && game.phase==='dispatch') rollHint.textContent='Capture is mandatory this turn.';
+  else if(game.dice.length) rollHint.textContent = `Pending dice: ${game.dice.join(' · ')}`;
+  else rollHint.textContent = 'Keep rolling while you get 6s.';
 }
 function updateRoster(){
   rosterEl.innerHTML='';
@@ -1008,7 +1192,7 @@ function showWin(){
   document.getElementById('winEmoji').textContent = won?'🏆':'🎪';
   document.getElementById('winTitle').textContent = won?'Victory!':`${SEATS[p].label} wins`;
   document.getElementById('winName').textContent = won
-    ? 'All four of your tokens made it home. Take a bow!'
+    ? 'All of your tokens made it home. Take a bow!'
     : 'Better luck next round — the carnival never sleeps.';
   won?sfx.win():sfx.lose();
   showOverlay(winOverlay);
@@ -1016,8 +1200,10 @@ function showWin(){
 
 /* settings wiring */
 const aiSeg=document.getElementById('aiSeg');
+const tokSeg=document.getElementById('tokSeg');
 function syncSettingsUI(){
   [...aiSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.aiCount));
+  [...tokSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.tokenCount));
   document.getElementById('optPrisoner').checked=settings.prisoner;
   document.getElementById('optWall').checked=settings.wall;
   document.getElementById('optSound').checked=settings.sound;
@@ -1028,6 +1214,13 @@ aiSeg.addEventListener('click', e=>{
   if(n===settings.aiCount) return;
   settings.aiCount=n; saveSettings(); syncSettingsUI();
   newGame(); toast(`New game — you vs ${n} AI`);
+});
+tokSeg.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const n=+b.dataset.n;
+  if(n===settings.tokenCount) return;
+  settings.tokenCount=n; saveSettings(); syncSettingsUI();
+  newGame(); toast(`New game — ${n} tokens each`);
 });
 document.getElementById('optPrisoner').addEventListener('change', e=>{
   settings.prisoner=e.target.checked; saveSettings(); updatePills();
@@ -1062,7 +1255,9 @@ resize();
 newGame();
 requestAnimationFrame(loop);
 // debug hook (handy in devtools / automated tests)
-window.__ludo = {game, settings, newGame, legalActions, performAction, tokenById, doRoll, SEATS, START, TRACK};
+window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
+  captureReachable, cloneToks, actionCaptureVictim, tokenById, doRoll, beginDispatch,
+  SEATS, START, TRACK};
 </script>
 </body>
 </html>
