@@ -40,9 +40,15 @@ illegal for that piece) and is then out of play. Safe cells (absolute): ONLY the
 `{8,21,34,47}` — entry squares are normal cells, so deploying from base can capture an
 enemy camped on your entry.
 
-Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber, top-right ·
-3 Cobalt, bottom-right. Turn order is seat order (clockwise). Active seats by AI count:
-1 → `[0,2]`, 2 → `[0,1,2]`, 3 → all four.
+Seats: 0 Crimson bottom-left · 1 Emerald, top-left · 2 Amber, top-right ·
+3 Cobalt, bottom-right. The human picks their seat in settings (`settings.humanSeat`).
+Turn order is clockwise (ascending seat index), rotated so the human rolls first.
+Active seats: 1 AI → human + opposite corner, 2 AI → human + next two clockwise,
+3 AI → all four.
+
+**Board themes**: `THEMES` (carnival / classic / wood / neon) holds every board-drawing
+color; the renderer reads `TH()` each frame, and page chrome switches via
+`body[data-theme]` CSS variable overrides. Player token colors never change with theme.
 
 ## Rules
 
@@ -67,10 +73,10 @@ Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber,
   `computeAllowed()` keeps only first moves that still achieve it. The UI dims
   forbidden/frozen pieces and explains on tap (`blockReasons`: 'waste'/'capture').
 - Tokens race clockwise around the 52-square track, then up their colored home column.
-- Landing on a **single** opponent token captures it (back to its base — or jail, see
-  Prisoner rule) — entry squares included; deploying from base captures too. Only the
-  four **star** squares are safe. Landing on a square with 2+ opponent tokens captures
-  nothing (tokens coexist).
+- Landing on a square holding opponent tokens captures them **all** (back to their
+  bases — or jail, see Prisoner rule) — entry squares included; deploying from base
+  captures too. Only the four **star** squares are safe, so enemy tokens can only ever
+  share a square on a star (or behind the Wall rule, which blocks landing outright).
 - **Exact roll to finish**: a piece is home when it lands exactly on the last colored
   square of its corridor; a die that would overshoot cannot be used on that piece.
   Finished pieces leave the board (shown in the center triangle). Games can be played

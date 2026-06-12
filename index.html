@@ -43,6 +43,37 @@ body{
   display:flex;flex-direction:column;align-items:center;
   overflow-x:hidden;
 }
+/* ---------- board themes (page chrome) ---------- */
+body[data-theme="classic"]{
+  --bg-mid:#f0e9d8; --bg-deep:#e5dcc2;
+  --panel:#fffdf4; --panel-soft:#f5eedb; --panel-edge:#d8caa4;
+  --ink:#2c2417; --text:#33291a; --text-dim:#6d5c42; --text-faint:#9b8a6a;
+  --gold:#c08a17;
+  background:
+    radial-gradient(900px 500px at 50% -10%, rgba(192,138,23,.10), transparent 60%),
+    linear-gradient(180deg,var(--bg-mid),var(--bg-deep) 70%);
+  background-attachment:fixed;
+}
+body[data-theme="wood"]{
+  --bg-mid:#4c3019; --bg-deep:#33200e;
+  --panel:#5b3c20; --panel-soft:#6b4827; --panel-edge:#8a653c;
+  --text:#f8ead2; --text-dim:#d9c09b; --text-faint:#ab906a;
+  background:
+    radial-gradient(1000px 600px at 30% -10%, rgba(255,190,100,.10), transparent 60%),
+    radial-gradient(800px 700px at 95% 110%, rgba(120,60,20,.5), transparent 60%),
+    linear-gradient(180deg,var(--bg-mid),var(--bg-deep) 70%);
+  background-attachment:fixed;
+}
+body[data-theme="neon"]{
+  --bg-mid:#0a0f22; --bg-deep:#04060d;
+  --panel:#0e1631; --panel-soft:#13204a; --panel-edge:#23407c;
+  --text:#e8f6ff; --text-dim:#9fb9d8; --text-faint:#5f7799;
+  background:
+    radial-gradient(1000px 600px at 15% -10%, rgba(64,230,255,.10), transparent 55%),
+    radial-gradient(900px 700px at 100% 15%, rgba(255,60,180,.08), transparent 55%),
+    linear-gradient(180deg,var(--bg-mid),var(--bg-deep) 70%);
+  background-attachment:fixed;
+}
 body::before{ /* grain */
   content:"";position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:0;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
@@ -85,7 +116,7 @@ h1 .spark{color:var(--gold);-webkit-text-fill-color:var(--gold);font-size:.5em;v
 }
 .board-wrap{
   position:relative;border-radius:22px;padding:10px;
-  background:linear-gradient(160deg,#2b2658,#1a1738 60%,#221d49);
+  background:linear-gradient(160deg,var(--panel-soft),var(--panel) 60%,var(--panel-soft));
   border:1px solid var(--panel-edge);
   box-shadow:0 24px 60px -18px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08),
              0 0 70px -25px rgba(90,133,255,.35);
@@ -208,7 +239,7 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
 .overlay.show{opacity:1;pointer-events:auto}
 .modal{
   width:min(430px,94vw);max-height:88vh;overflow:auto;border-radius:22px;padding:22px;
-  background:linear-gradient(170deg,#2c2659,#1d1940 65%);
+  background:linear-gradient(170deg,var(--panel-soft),var(--panel) 65%);
   border:1px solid var(--panel-edge);
   box-shadow:0 40px 90px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.09);
   transform:translateY(10px) scale(.97);transition:transform .22s ease;
@@ -230,6 +261,10 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
   font-weight:800;font-size:14px;color:var(--text-faint);background:transparent;transition:all .15s ease;
 }
 .seg button.sel{color:var(--ink);background:linear-gradient(180deg,#ffe1a1,var(--gold))}
+.swatch-seg button{width:30px;height:30px;border-radius:9px;padding:0;border:2px solid transparent}
+.swatch-seg button.sel{border-color:#fff;box-shadow:0 0 0 2px var(--gold), 0 0 12px -2px var(--gold);background:var(--sw)}
+.swatch-seg button{background:var(--sw)}
+.swatch-seg button.round{border-radius:50%}
 .toggle{position:relative;width:52px;height:29px;flex:none;cursor:pointer}
 .toggle input{position:absolute;opacity:0;inset:0;cursor:pointer;margin:0}
 .toggle .tr{
@@ -253,7 +288,7 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
 /* toast */
 #toast{
   position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:60;
-  background:linear-gradient(180deg,#312a64,#241f4c);color:var(--text);
+  background:linear-gradient(180deg,var(--panel-soft),var(--panel));color:var(--text);
   border:1px solid var(--panel-edge);border-radius:99px;padding:9px 20px;
   font-weight:800;font-size:14px;box-shadow:0 12px 30px rgba(0,0,0,.55);
   opacity:0;pointer-events:none;transition:all .25s ease;white-space:nowrap;
@@ -322,9 +357,27 @@ footer a{color:var(--text-dim)}
     <h2>Settings</h2>
     <p class="sub">Changing opponents starts a new game. Rules and piece count are on the main screen.</p>
     <div class="setting">
-      <div class="lab"><b>AI opponents</b><span>You always play Crimson.</span></div>
+      <div class="lab"><b>AI opponents</b><span>Starts a new game.</span></div>
       <div class="seg" id="aiSeg">
         <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Your color</b><span>Pick your seat — starts a new game.</span></div>
+      <div class="seg swatch-seg" id="seatSeg">
+        <button class="round" data-s="0" title="Crimson" style="--sw:linear-gradient(135deg,#ff8aa0,#ef4f6e)"></button>
+        <button class="round" data-s="1" title="Emerald" style="--sw:linear-gradient(135deg,#8aeec4,#34c98a)"></button>
+        <button class="round" data-s="2" title="Amber" style="--sw:linear-gradient(135deg,#ffdf96,#f6b83c)"></button>
+        <button class="round" data-s="3" title="Cobalt" style="--sw:linear-gradient(135deg,#a4bcff,#5a85ff)"></button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Board theme</b><span>Style only — token colors stay the same.</span></div>
+      <div class="seg swatch-seg" id="themeSeg">
+        <button data-t="carnival" title="Night Carnival" style="--sw:linear-gradient(135deg,#4b3f8f,#1b1838)"></button>
+        <button data-t="classic" title="Classic" style="--sw:linear-gradient(135deg,#ffffff,#e7dcc0)"></button>
+        <button data-t="wood" title="Tavern" style="--sw:linear-gradient(135deg,#a5713a,#54381e)"></button>
+        <button data-t="neon" title="Arcade" style="--sw:linear-gradient(135deg,#3fd5ee,#0b1022)"></button>
       </div>
     </div>
     <div class="setting">
@@ -345,7 +398,7 @@ footer a{color:var(--text-dim)}
     <p class="sub">Night Carnival house rules.</p>
     <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner).</p></div>
     <div class="rblock"><b>♻ Play every die</b><p>You must dispatch so that as many dice as possible get played. A choice that strands a die is illegal if another choice plays them all — this outranks even capturing.</p></div>
-    <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a lone opponent token captures it — entry squares included. If a max-dice dispatch can reach a capture, you must take a capturing route; with several options, you choose which. A piece that captures is <b>spent</b> — it rests until your next turn, so your remaining dice go to other pieces.</p></div>
+    <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a square holding opponent pieces captures them <b>all</b> — entry squares included. If a max-dice dispatch can reach a capture, you must take a capturing route; with several options, you choose which. A piece that captures is <b>spent</b> — it rests until your next turn, so your remaining dice go to other pieces.</p></div>
     <div class="rblock"><b>★ Safe squares</b><p>The four star squares are the only safe cells — nothing can be captured there. Tokens may share any square otherwise.</p></div>
     <div class="rblock"><b>⛓ Prisoner rule <em>(optional)</em></b><p>Captured tokens go to the capturer's jail instead of back home. The owner must spend a rolled 6 to free one back to base — then deploy it later with another 6.</p></div>
     <div class="rblock"><b>🧱 Wall rule <em>(optional)</em></b><p>Two or more of your tokens on one square form a wall. No token may pass over it, and opponents can't land on it — but you can land more of your own pieces there to grow the wall as tall as you like. Move stacked tokens off to break it.</p></div>
@@ -406,9 +459,55 @@ const SLOT_SETS = {2:[[2,3],[4,3]], 4:[[2,2],[4,2],[2,4],[4,4]]};
 const relOf = (p,abs)=>(abs-START[p]+52)%52;
 const absOf = (p,rel)=>(START[p]+rel)%52;
 
+/* ---------- board themes (player colors never change) ---------- */
+const THEMES = {
+  carnival: { label:'Night Carnival',
+    felt:['#23204a','#1b1838','#221e49'], glow:'rgba(255,212,121,.10)',
+    cell:'rgba(48,43,92,.85)', cellStroke:'rgba(255,255,255,.07)',
+    entryA:.8, entryStroke:'rgba(255,255,255,.25)',
+    star:'rgba(255,225,160,.32)', starStroke:'rgba(255,225,160,.5)',
+    chevron:'rgba(255,255,255,.5)',
+    court:'rgba(13,10,28,.78)', courtStroke:'rgba(255,255,255,.10)',
+    nest:'rgba(0,0,0,.4)', nestStroke:'rgba(255,255,255,.13)',
+    homeA:.32, homeStrokeA:.4,
+    hub:['#fff2cf','#e9a93f'], hubStar:'rgba(140,80,10,.65)' },
+  classic: { label:'Classic',
+    felt:['#ffffff','#faf6ea','#ffffff'], glow:'rgba(0,0,0,0)',
+    cell:'#ffffff', cellStroke:'rgba(40,33,24,.5)',
+    entryA:.95, entryStroke:'rgba(40,33,24,.55)',
+    star:'rgba(70,60,45,.16)', starStroke:'rgba(70,60,45,.65)',
+    chevron:'rgba(255,255,255,.95)',
+    court:'#ffffff', courtStroke:'rgba(40,33,24,.45)',
+    nest:'rgba(0,0,0,.10)', nestStroke:'rgba(40,33,24,.4)',
+    homeA:.9, homeStrokeA:.6,
+    hub:['#fffef8','#efe3c2'], hubStar:'rgba(125,95,35,.55)' },
+  wood: { label:'Tavern',
+    felt:['#6a4a2b','#54381e','#69482a'], glow:'rgba(255,200,120,.08)',
+    cell:'#e9cf9f', cellStroke:'rgba(60,35,12,.5)',
+    entryA:.9, entryStroke:'rgba(60,35,12,.5)',
+    star:'rgba(90,55,15,.3)', starStroke:'rgba(90,55,15,.6)',
+    chevron:'rgba(255,248,230,.9)',
+    court:'rgba(46,28,12,.78)', courtStroke:'rgba(255,235,200,.15)',
+    nest:'rgba(0,0,0,.35)', nestStroke:'rgba(255,235,200,.2)',
+    homeA:.6, homeStrokeA:.5,
+    hub:['#ffe9b8','#caa24e'], hubStar:'rgba(90,55,15,.6)' },
+  neon: { label:'Arcade',
+    felt:['#0b1022','#070b18','#0c1124'], glow:'rgba(64,230,255,.07)',
+    cell:'rgba(16,26,54,.95)', cellStroke:'rgba(64,230,255,.22)',
+    entryA:.85, entryStroke:'rgba(255,255,255,.3)',
+    star:'rgba(64,230,255,.2)', starStroke:'rgba(64,230,255,.6)',
+    chevron:'rgba(255,255,255,.6)',
+    court:'rgba(4,8,20,.85)', courtStroke:'rgba(64,230,255,.18)',
+    nest:'rgba(0,0,0,.5)', nestStroke:'rgba(64,230,255,.25)',
+    homeA:.4, homeStrokeA:.55,
+    hub:['#d8fbff','#3fd5ee'], hubStar:'rgba(10,60,80,.7)' },
+};
+const TH = ()=>THEMES[settings.theme]||THEMES.carnival;
+function applyTheme(){ document.body.dataset.theme = settings.theme in THEMES ? settings.theme : 'carnival'; }
+
 /* ---------- settings (persisted) ---------- */
 const settings = Object.assign(
-  {aiCount:3, tokenCount:4, prisoner:false, wall:false, sound:true},
+  {aiCount:3, tokenCount:4, prisoner:false, wall:false, sound:true, theme:'carnival', humanSeat:0},
   JSON.parse(localStorage.getItem('ludo-settings')||'{}')
 );
 const saveSettings = ()=>localStorage.setItem('ludo-settings', JSON.stringify(settings));
@@ -440,9 +539,13 @@ const controllers = [];
 const isAI = p => controllers[p]==='ai';
 
 function newGame(){
-  game.order = [[0,2],[0,1,2],[0,1,2,3]][settings.aiCount-1];
+  const h = [0,1,2,3].includes(settings.humanSeat) ? settings.humanSeat : 0;
+  const layout = {1:[h,(h+2)%4], 2:[h,(h+1)%4,(h+2)%4], 3:[0,1,2,3]}[settings.aiCount];
+  const seats = layout.slice().sort((a,b)=>a-b);     // ascending = clockwise
+  const hi = seats.indexOf(h);
+  game.order = seats.slice(hi).concat(seats.slice(0,hi));   // human rolls first
   controllers.length = 0;
-  for(let p=0;p<4;p++) controllers[p] = (p===0?'human':'ai');
+  for(let p=0;p<4;p++) controllers[p] = (p===h?'human':'ai');
   game.tokens = [];
   for(const p of game.order)
     for(let s=0;s<settings.tokenCount;s++)
@@ -533,21 +636,20 @@ function legalActionsFor(toks, p, die){
   }
   return acts;
 }
-// The lone opponent token this action would capture, or null.
-// Deploying from base captures too — entry squares are normal cells.
-function actionCaptureVictim(toks, p, act){
-  if(act.type==='free') return null;
+// Every opponent token this action would capture (all enemies on the landing
+// square — stars excepted). Deploying from base captures too.
+function actionCaptureVictims(toks, p, act){
+  if(act.type==='free') return [];
   let destIdx;
   if(act.type==='enter') destIdx = START[p];
   else {
     const last = act.path[act.path.length-1];
-    if(last.kind!=='track') return null;
+    if(last.kind!=='track') return [];
     destIdx = last.idx;
   }
-  if(SAFE.has(destIdx)) return null;
+  if(SAFE.has(destIdx)) return [];
   const mover = toks.find(t=>t.id===act.t);
-  const enemies = tokensAtTrack(toks, destIdx, mover).filter(t=>t.seat!==p);
-  return enemies.length===1 ? enemies[0] : null;
+  return tokensAtTrack(toks, destIdx, mover).filter(t=>t.seat!==p);
 }
 
 /* ---------- forced-capture search ---------- */
@@ -555,7 +657,7 @@ function cloneToks(toks){ return toks.map(t=>({...t})); }
 function applySim(toks, p, act){             // mutate a sim clone; victims just leave the square
   const tok = toks.find(t=>t.id===act.t);
   if(act.type==='free'){ tok.state='base'; tok.heldBy=-1; return; }
-  const victim = actionCaptureVictim(toks, p, act);
+  const victims = actionCaptureVictims(toks, p, act);
   if(act.type==='enter'){ tok.state='track'; tok.trackIdx=START[p]; }
   else {
     const last = act.path[act.path.length-1];
@@ -563,7 +665,8 @@ function applySim(toks, p, act){             // mutate a sim clone; victims just
     else if(last.kind==='home'){ tok.state='home'; tok.homeIdx=last.h; tok.trackIdx=-1; }
     else { tok.state='track'; tok.trackIdx=last.idx; }
   }
-  if(victim){ victim.state='base'; victim.trackIdx=-1; tok.frozen=true; }
+  for(const v of victims){ v.state='base'; v.trackIdx=-1; }
+  if(victims.length) tok.frozen=true;
 }
 const diceMinus = (dice,d)=>{ const i=dice.indexOf(d); return dice.slice(0,i).concat(dice.slice(i+1)); };
 // Best reachable outcome from this position, lexicographic: most dice played
@@ -579,7 +682,7 @@ function bestOutcome(toks, p, dice){
       const key = a.type+':'+t.state+':'+t.trackIdx+':'+t.homeIdx;
       if(seen.has(key)) continue;
       seen.add(key);
-      branches.push({d, a, cap: actionCaptureVictim(toks, p, a)?1:0});
+      branches.push({d, a, cap: actionCaptureVictims(toks, p, a).length?1:0});
     }
   }
   branches.sort((x,y)=>y.cap-x.cap);
@@ -614,7 +717,7 @@ function computeAllowed(){
   game.mustCapture = capGoal===1;
   const ok = [];
   for(const pr of pairs){
-    const cap = actionCaptureVictim(toks, p, pr.act) ? 1 : 0;
+    const cap = actionCaptureVictims(toks, p, pr.act).length ? 1 : 0;
     const rest = diceMinus(game.dice, pr.die);
     let played = 1, captured = cap;
     if(rest.length){
@@ -630,7 +733,7 @@ function computeAllowed(){
   for(const pr of ok){ game.blockedIds.delete(pr.act.t); delete game.blockReasons[pr.act.t]; }
   game.allowed = ok;
 }
-const pairCaptures = pr => !!actionCaptureVictim(game.tokens, curSeat(), pr.act);
+const pairCaptures = pr => actionCaptureVictims(game.tokens, curSeat(), pr.act).length>0;
 
 /* ---------- turn engine ---------- */
 function startTurn(){
@@ -727,19 +830,21 @@ function resolveLanding(tok){
   const idx = tok.trackIdx;
   if(SAFE.has(idx)) return;
   const enemies = tokensAtTrack(game.tokens, idx, tok).filter(t=>t.seat!==tok.seat);
-  if(enemies.length!==1) return;          // only a lone opponent token is captured
-  const victim = enemies[0];
+  if(!enemies.length) return;             // every enemy on the square is captured
   game.capturedThisTurn = true;
   tok.frozen = true;                      // a capturing piece rests until next turn
-  ping(cellXY({kind:'track', idx}), SEATS[victim.seat].main);
+  ping(cellXY({kind:'track', idx}), SEATS[enemies[0].seat].main);
+  const names = [...new Set(enemies.map(v=>seatName(v.seat)))].join(' & ');
+  for(const victim of enemies){
+    if(settings.prisoner){ victim.state='jail'; victim.heldBy=tok.seat; victim.trackIdx=-1; }
+    else { victim.state='base'; victim.trackIdx=-1; }
+  }
   if(settings.prisoner){
-    victim.state='jail'; victim.heldBy=tok.seat; victim.trackIdx=-1;
     sfx.jail();
-    toast(`${seatName(tok.seat)} took ${seatName(victim.seat)}'s token prisoner!`);
+    toast(`${seatName(tok.seat)} jailed ${enemies.length>1 ? enemies.length+' tokens' : names}!`);
   } else {
-    victim.state='base'; victim.trackIdx=-1;
     sfx.capture();
-    toast(`${seatName(tok.seat)} captured ${seatName(victim.seat)}!`);
+    toast(`${seatName(tok.seat)} captured ${enemies.length>1?enemies.length+' tokens':names}!`);
   }
 }
 function finishStep(){
@@ -784,8 +889,8 @@ function aiScore(p, act){
   if(act.type==='free')  return 30 + jitter + (tokensOf(p).filter(t=>t.state==='jail').length>1?6:0);
   if(act.type==='enter'){
     let s = 26 + jitter;
-    const v = actionCaptureVictim(game.tokens, p, act);
-    if(v) s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);
+    for(const v of actionCaptureVictims(game.tokens, p, act))
+      s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);
     return s;
   }
   const tok = tokenById(act.t);
@@ -795,11 +900,8 @@ function aiScore(p, act){
   if(last.kind==='done') return s+42;
   if(last.kind==='home') return s + (tok.state==='track'?26:10) + last.h;
   const dest = last.idx;
-  const victim = actionCaptureVictim(game.tokens, p, act);
-  if(victim){
-    const vRel = relOf(victim.seat, victim.trackIdx);
-    s += 40 + vRel*0.25 + (settings.prisoner?12:0);  // jailing hurts more
-  }
+  for(const v of actionCaptureVictims(game.tokens, p, act))
+    s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);  // jailing hurts more
   if(SAFE.has(dest)) s += 10;
   if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*9;   // fleeing danger
   const dNew = dangerAt(p, dest);
@@ -937,15 +1039,15 @@ function drawCage(x,y,R,seat){
 }
 
 function draw(now){
-  const size=N*S;
+  const size=N*S, T=TH();
   ctx.clearRect(0,0,size,size);
   // board felt
   const bg=ctx.createLinearGradient(0,0,size,size);
-  bg.addColorStop(0,'#23204a'); bg.addColorStop(.5,'#1b1838'); bg.addColorStop(1,'#221e49');
+  bg.addColorStop(0,T.felt[0]); bg.addColorStop(.5,T.felt[1]); bg.addColorStop(1,T.felt[2]);
   rr(0,0,size,size,S*0.5); ctx.fillStyle=bg; ctx.fill();
   // center soft glow
   const glow=ctx.createRadialGradient(px(7),px(7),S*0.5,px(7),px(7),S*6);
-  glow.addColorStop(0,'rgba(255,212,121,.10)'); glow.addColorStop(1,'rgba(255,212,121,0)');
+  glow.addColorStop(0,T.glow); glow.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=glow; ctx.fillRect(0,0,size,size);
 
   drawBases();
@@ -957,6 +1059,7 @@ function draw(now){
   drawAnim(now);
 }
 function drawBases(){
+  const T=TH();
   for(let p=0;p<4;p++){
     const c=SEATS[p], b=c.base, X=b.c*S, Y=b.r*S, W=6*S;
     const active=seatActive(p);
@@ -969,51 +1072,53 @@ function drawBases(){
     ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.stroke();
     // inner court
     rr(X+S*0.85, Y+S*0.85, W-S*1.7, W-S*1.7, S*0.45);
-    ctx.fillStyle='rgba(13,10,28,.78)'; ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle=T.court; ctx.fill();
+    ctx.strokeStyle=T.courtStroke; ctx.lineWidth=1; ctx.stroke();
     // nests
     for(const s of baseSlots()){
       const x=px(b.c+s[0]), y=px(b.r+s[1]);
       ctx.beginPath(); ctx.arc(x,y,S*0.42,0,Math.PI*2);
-      ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,.13)'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle=T.nest; ctx.fill();
+      ctx.strokeStyle=T.nestStroke; ctx.lineWidth=1.5; ctx.stroke();
     }
     ctx.restore();
   }
 }
 function drawTrackCells(){
+  const T=TH();
   for(let i=0;i<52;i++){
     const t=TRACK[i], x=t.c*S, y=t.r*S;
     rr(x+1.5, y+1.5, S-3, S-3, S*0.22);
-    let fill='rgba(48,43,92,.85)', stroke='rgba(255,255,255,.07)';
+    let fill=T.cell, stroke=T.cellStroke;
     const entrySeat = START.indexOf(i);
     if(entrySeat>=0){
-      fill = hexA(SEATS[entrySeat].main, .8);
-      stroke = 'rgba(255,255,255,.25)';
+      fill = hexA(SEATS[entrySeat].main, T.entryA);
+      stroke = T.entryStroke;
     }
     ctx.fillStyle=fill; ctx.fill();
     ctx.strokeStyle=stroke; ctx.lineWidth=1; ctx.stroke();
     if(STARS.has(i)){
       drawStar(px(t.c), px(t.r), S*0.3);
-      ctx.fillStyle='rgba(255,225,160,.32)'; ctx.fill();
-      ctx.strokeStyle='rgba(255,225,160,.5)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle=T.star; ctx.fill();
+      ctx.strokeStyle=T.starStroke; ctx.lineWidth=1; ctx.stroke();
     }
     if(entrySeat>=0){ // direction chevron
       const d=SEATS[entrySeat].dir, cx=px(t.c), cy=px(t.r);
       ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(d.dy,d.dx));
       ctx.beginPath(); ctx.moveTo(-S*0.12,-S*0.18); ctx.lineTo(S*0.14,0); ctx.lineTo(-S*0.12,S*0.18);
-      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
+      ctx.strokeStyle=T.chevron; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
       ctx.restore();
     }
   }
 }
 function drawHomeColumns(){
+  const T=TH();
   for(let p=0;p<4;p++){
     for(let h=0;h<5;h++){
       const c=homeCell(p,h), x=c.c*S, y=c.r*S;
       rr(x+1.5,y+1.5,S-3,S-3,S*0.22);
-      ctx.fillStyle=hexA(SEATS[p].main, seatActive(p)?.32:.12); ctx.fill();
-      ctx.strokeStyle=hexA(SEATS[p].main,.4); ctx.lineWidth=1; ctx.stroke();
+      ctx.fillStyle=hexA(SEATS[p].main, seatActive(p)?T.homeA:.12); ctx.fill();
+      ctx.strokeStyle=hexA(SEATS[p].main,T.homeStrokeA); ctx.lineWidth=1; ctx.stroke();
     }
   }
 }
@@ -1030,12 +1135,13 @@ function drawCenter(){
   tri([x0,y0],[x0,y1],1);  // left   -> emerald
   tri([x0,y0],[x1,y0],2);  // top    -> amber
   tri([x1,y0],[x1,y1],3);  // right  -> cobalt
+  const T=TH();
   ctx.beginPath(); ctx.arc(cx,cy,S*0.52,0,Math.PI*2);
   const g=ctx.createRadialGradient(cx-S*0.15,cy-S*0.2,S*0.05,cx,cy,S*0.55);
-  g.addColorStop(0,'#fff2cf'); g.addColorStop(1,'#e9a93f');
+  g.addColorStop(0,T.hub[0]); g.addColorStop(1,T.hub[1]);
   ctx.fillStyle=g; ctx.fill();
   ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1.5; ctx.stroke();
-  drawStar(cx,cy,S*0.26); ctx.fillStyle='rgba(140,80,10,.65)'; ctx.fill();
+  drawStar(cx,cy,S*0.26); ctx.fillStyle=T.hubStar; ctx.fill();
 }
 function drawEffects(now){
   for(let i=effects.length-1;i>=0;i--){
@@ -1288,11 +1394,28 @@ function showWin(){
 /* settings wiring */
 const aiSeg=document.getElementById('aiSeg');
 const tokSeg=document.getElementById('tokSeg');
+const seatSeg=document.getElementById('seatSeg');
+const themeSeg=document.getElementById('themeSeg');
 function syncSettingsUI(){
   [...aiSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.aiCount));
   [...tokSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.tokenCount));
+  [...seatSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.s===settings.humanSeat));
+  [...themeSeg.children].forEach(b=>b.classList.toggle('sel', b.dataset.t===settings.theme));
   document.getElementById('optSound').checked=settings.sound;
 }
+seatSeg.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const s=+b.dataset.s;
+  if(s===settings.humanSeat) return;
+  settings.humanSeat=s; saveSettings(); syncSettingsUI();
+  newGame(); toast(`New game — you play ${SEATS[s].label}`);
+});
+themeSeg.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.t===settings.theme) return;
+  settings.theme=b.dataset.t; saveSettings(); syncSettingsUI();
+  applyTheme(); toast(`${THEMES[settings.theme].label} theme`);
+});
 aiSeg.addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
   const n=+b.dataset.n;
@@ -1342,14 +1465,15 @@ window.addEventListener('resize', resize);
 /* ---------- boot ---------- */
 document.getElementById('optPrisoner').checked = settings.prisoner;
 document.getElementById('optWall').checked = settings.wall;
+applyTheme();
 syncSettingsUI();
 resize();
 newGame();
 requestAnimationFrame(loop);
 // debug hook (handy in devtools / automated tests)
 window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
-  bestOutcome, cloneToks, actionCaptureVictim, tokenById, doRoll, beginDispatch,
-  SEATS, START, TRACK};
+  bestOutcome, cloneToks, actionCaptureVictims, tokenById, doRoll, beginDispatch,
+  THEMES, SEATS, START, TRACK};
 </script>
 </body>
 </html>
