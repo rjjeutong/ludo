@@ -35,8 +35,9 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 Entry offsets per seat: `START = [0, 13, 26, 39]`. A token's relative position is
 `rel = (trackIdx - START[seat] + 52) % 52`, range 0–50; `rel+roll ≥ 51` turns into the
 home column (`homeIdx 0–4`), and the 6th home step finishes the token (**overshoot is
-allowed** — no exact-roll requirement). Safe cells (absolute): entries `{0,13,26,39}` +
-stars `{8,21,34,47}`.
+allowed** — no exact-roll requirement). Safe cells (absolute): ONLY the four stars
+`{8,21,34,47}` — entry squares are normal cells, so deploying from base can capture an
+enemy camped on your entry.
 
 Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber, top-right ·
 3 Cobalt, bottom-right. Turn order is seat order (clockwise). Active seats by AI count:
@@ -57,8 +58,9 @@ Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber,
   with several capture options the player picks freely.
 - Tokens race clockwise around the 52-square track, then up their colored home column.
 - Landing on a **single** opponent token captures it (back to its base — or jail, see
-  Prisoner rule). No capture on safe squares (entries + stars). Landing on a square with
-  2+ opponent tokens captures nothing (tokens coexist).
+  Prisoner rule) — entry squares included; deploying from base captures too. Only the
+  four **star** squares are safe. Landing on a square with 2+ opponent tokens captures
+  nothing (tokens coexist).
 - No exact roll needed to finish. Games can be played with **2 or 4 tokens** per player
   (settings). First player with all tokens home wins; game ends.
 
