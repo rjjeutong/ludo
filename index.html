@@ -348,7 +348,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 10</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 11</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -1047,7 +1047,7 @@ function draw(now){
   glow.addColorStop(0,T.glow); glow.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=glow; ctx.fillRect(0,0,size,size);
 
-  drawBases();
+  drawBases(now);
   drawTrackCells();
   drawHomeColumns();
   drawCenter();
@@ -1055,8 +1055,10 @@ function draw(now){
   drawTokens(now);
   drawAnim(now);
 }
-function drawBases(){
+function drawBases(now){
   const T=TH();
+  const turnSeat = game.winner==null ? curSeat() : -1;
+  const pulse = 0.5+0.5*Math.sin((now||0)/300);
   for(let p=0;p<4;p++){
     const c=SEATS[p], b=c.base, X=b.c*S, Y=b.r*S, W=6*S;
     const active=seatActive(p);
@@ -1077,6 +1079,15 @@ function drawBases(){
       ctx.beginPath(); ctx.arc(x,y,S*0.42,0,Math.PI*2);
       ctx.fillStyle=T.nest; ctx.fill();
       ctx.strokeStyle=T.nestStroke; ctx.lineWidth=1.5; ctx.stroke();
+    }
+    // whose turn: pulsing glow ring around the active player's base
+    if(p===turnSeat){
+      rr(X+S*0.18, Y+S*0.18, W-S*0.36, W-S*0.36, S*0.55);
+      ctx.shadowColor=c.light; ctx.shadowBlur=12+pulse*14;
+      ctx.strokeStyle=hexA('#ffffff', .45+pulse*.5);
+      ctx.lineWidth=3+pulse*2.5;
+      ctx.stroke();
+      ctx.shadowBlur=0;
     }
     ctx.restore();
   }
