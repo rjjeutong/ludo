@@ -52,11 +52,20 @@ Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber,
   (e.g. 6, 6, 3). Only then does the player dispatch them — one move per die, any order,
   any tokens. A 6 die can be spent to deploy from base (or free a prisoner). No
   three-sixes penalty. Unusable dice are forfeited; the turn ends when no die can be spent.
-- **Captures are mandatory**: if ANY way of dispatching the queue leads to a capture —
-  including chaining several dice onto one token — the player must take a capturing
-  route. Dispatches that would forfeit every reachable capture are illegal (the UI dims
-  them and explains). Capturing **once** lifts the obligation for the rest of the turn;
-  with several capture options the player picks freely.
+- **Play every die**: the dispatch must play as many dice as possible. A choice that
+  strands a die is illegal if another choice plays more — this obligation outranks the
+  capture obligation.
+- **Captures are mandatory** (within max-dice routes): if a dispatch that plays the
+  maximum number of dice can reach a capture, the player must take a capturing route;
+  with several capture options the player picks freely. Capturing once lifts the
+  obligation for the rest of the turn.
+- **Capture-freeze**: a piece that captures (including by deploying onto an enemy at
+  its entry) is spent — it cannot move again until its owner's next turn. Remaining
+  dice must go to other pieces.
+  Both obligations are enforced by `bestOutcome()` — a DFS that returns the
+  lexicographic max `(dicePlayed, capturedFlag)` over all dispatch sequences;
+  `computeAllowed()` keeps only first moves that still achieve it. The UI dims
+  forbidden/frozen pieces and explains on tap (`blockReasons`: 'waste'/'capture').
 - Tokens race clockwise around the 52-square track, then up their colored home column.
 - Landing on a **single** opponent token captures it (back to its base — or jail, see
   Prisoner rule) — entry squares included; deploying from base captures too. Only the

@@ -343,8 +343,9 @@ footer a{color:var(--text-dim)}
   <div class="modal">
     <h2>How to play</h2>
     <p class="sub">Night Carnival house rules.</p>
-    <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner). Dice you can't use are lost.</p></div>
-    <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a lone opponent token captures it — entry squares included. If any way of spending your dice reaches a capture, even by chaining dice onto one token, you must take a capturing route. One capture frees the rest of your dice; with several options, you choose which.</p></div>
+    <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner).</p></div>
+    <div class="rblock"><b>♻ Play every die</b><p>You must dispatch so that as many dice as possible get played. A choice that strands a die is illegal if another choice plays them all — this outranks even capturing.</p></div>
+    <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a lone opponent token captures it — entry squares included. If a max-dice dispatch can reach a capture, you must take a capturing route; with several options, you choose which. A piece that captures is <b>spent</b> — it rests until your next turn, so your remaining dice go to other pieces.</p></div>
     <div class="rblock"><b>★ Safe squares</b><p>The four star squares are the only safe cells — nothing can be captured there. Tokens may share any square otherwise.</p></div>
     <div class="rblock"><b>⛓ Prisoner rule <em>(optional)</em></b><p>Captured tokens go to the capturer's jail instead of back home. The owner must spend a rolled 6 to free one back to base — then deploy it later with another 6.</p></div>
     <div class="rblock"><b>🧱 Wall rule <em>(optional)</em></b><p>Two or more of your tokens on one square form a wall. No token may pass over it, and opponents can't land on it — but you can land more of your own pieces there to grow the wall as tall as you like. Move stacked tokens off to break it.</p></div>
@@ -517,7 +518,7 @@ function pathFor(toks, tok, roll){
 function legalActionsFor(toks, p, die){
   const acts=[];
   for(const tok of toks){
-    if(tok.seat!==p) continue;
+    if(tok.seat!==p || tok.frozen) continue;   // frozen = already captured this turn
     if(tok.state==='base'){
       if(die===6){
         const entry={kind:'track', idx:START[p]};   // deploying = landing: own wall is fine
@@ -562,53 +563,78 @@ function applySim(toks, p, act){             // mutate a sim clone; victims just
     else if(last.kind==='home'){ tok.state='home'; tok.homeIdx=last.h; tok.trackIdx=-1; }
     else { tok.state='track'; tok.trackIdx=last.idx; }
   }
-  if(victim){ victim.state='base'; victim.trackIdx=-1; }
+  if(victim){ victim.state='base'; victim.trackIdx=-1; tok.frozen=true; }
 }
 const diceMinus = (dice,d)=>{ const i=dice.indexOf(d); return dice.slice(0,i).concat(dice.slice(i+1)); };
-// True if ANY way of dispatching `dice` from this position includes a capture.
-function captureReachable(toks, p, dice){
+// Best reachable outcome from this position, lexicographic: most dice played
+// first, then whether a capture happens along the way. Interchangeable tokens
+// (same state & spot) are deduped, and capture-first ordering speeds early exit.
+function bestOutcome(toks, p, dice){
+  let best = {played:0, captured:0};
+  const branches = [];
   for(const d of new Set(dice)){
-    for(const act of legalActionsFor(toks, p, d)){
-      if(actionCaptureVictim(toks, p, act)) return true;
-      const rest = diceMinus(dice, d);
-      if(!rest.length) continue;
-      const t2 = cloneToks(toks);
-      applySim(t2, p, act);
-      if(captureReachable(t2, p, rest)) return true;
+    const seen = new Set();
+    for(const a of legalActionsFor(toks, p, d)){
+      const t = toks.find(x=>x.id===a.t);
+      const key = a.type+':'+t.state+':'+t.trackIdx+':'+t.homeIdx;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      branches.push({d, a, cap: actionCaptureVictim(toks, p, a)?1:0});
     }
   }
-  return false;
+  branches.sort((x,y)=>y.cap-x.cap);
+  for(const {d, a, cap} of branches){
+    const rest = diceMinus(dice, d);
+    let cand;
+    if(rest.length){
+      const t2 = cloneToks(toks);
+      applySim(t2, p, a);
+      const sub = bestOutcome(t2, p, rest);
+      cand = {played:1+sub.played, captured:Math.max(cap, sub.captured)};
+    } else cand = {played:1, captured:cap};
+    if(cand.played>best.played || (cand.played===best.played && cand.captured>best.captured)) best=cand;
+    if(best.played===dice.length && best.captured===1) break;   // unbeatable
+  }
+  return best;
 }
-// All spendable {die, act} pairs right now, restricted so the player can never
-// dispatch in a way that forfeits a reachable capture (until one is made).
+// All spendable {die, act} pairs right now, restricted by the turn obligations
+// in precedence order: (1) play as many dice as possible, (2) capture if a
+// max-dice route can (until one is made). blockReasons explains filtered tokens.
 function computeAllowed(){
   const p = curSeat(), toks = game.tokens;
-  let pairs = [];
+  const pairs = [];
   for(const d of new Set(game.dice))
     for(const act of legalActionsFor(toks, p, d)) pairs.push({die:d, act});
   game.mustCapture = false;
   game.blockedIds = new Set();
-  if(!game.capturedThisTurn && pairs.length &&
-     captureReachable(cloneToks(toks), p, game.dice)){
-    game.mustCapture = true;
-    const ok = pairs.filter(pr=>{
-      if(actionCaptureVictim(toks, p, pr.act)) return true;
-      const rest = diceMinus(game.dice, pr.die);
-      if(!rest.length) return false;
+  game.blockReasons = {};
+  if(!pairs.length){ game.allowed=[]; return; }
+  const best = bestOutcome(cloneToks(toks), p, [...game.dice]);
+  const capGoal = game.capturedThisTurn ? 0 : best.captured;
+  game.mustCapture = capGoal===1;
+  const ok = [];
+  for(const pr of pairs){
+    const cap = actionCaptureVictim(toks, p, pr.act) ? 1 : 0;
+    const rest = diceMinus(game.dice, pr.die);
+    let played = 1, captured = cap;
+    if(rest.length){
       const t2 = cloneToks(toks);
       applySim(t2, p, pr.act);
-      return captureReachable(t2, p, rest);
-    });
-    for(const pr of pairs) if(!ok.includes(pr)) game.blockedIds.add(pr.act.t);
-    for(const pr of ok) game.blockedIds.delete(pr.act.t);
-    pairs = ok;
+      const sub = bestOutcome(t2, p, rest);
+      played += sub.played; captured = Math.max(captured, sub.captured);
+    }
+    if(played===best.played && captured>=capGoal) ok.push(pr);
+    else game.blockReasons[pr.act.t] = played<best.played ? 'waste' : 'capture';
   }
-  game.allowed = pairs;
+  for(const pr of pairs) if(!ok.includes(pr)) game.blockedIds.add(pr.act.t);
+  for(const pr of ok){ game.blockedIds.delete(pr.act.t); delete game.blockReasons[pr.act.t]; }
+  game.allowed = ok;
 }
 const pairCaptures = pr => !!actionCaptureVictim(game.tokens, curSeat(), pr.act);
 
 /* ---------- turn engine ---------- */
 function startTurn(){
+  for(const t of game.tokens) t.frozen=false;   // capture-freeze lasts one turn
   game.dice=[]; game.lastRoll=null; game.selDie=null;
   game.allowed=[]; game.blockedIds=new Set();
   game.mustCapture=false; game.capturedThisTurn=false;
@@ -704,6 +730,7 @@ function resolveLanding(tok){
   if(enemies.length!==1) return;          // only a lone opponent token is captured
   const victim = enemies[0];
   game.capturedThisTurn = true;
+  tok.frozen = true;                      // a capturing piece rests until next turn
   ping(cellXY({kind:'track', idx}), SEATS[victim.seat].main);
   if(settings.prisoner){
     victim.state='jail'; victim.heldBy=tok.seat; victim.trackIdx=-1;
@@ -1046,7 +1073,7 @@ function drawTokens(now){
       ctx.beginPath(); ctx.arc(x,y,Rt+3.5,0,Math.PI*2);
       ctx.strokeStyle=hexA(SEATS[tok.seat].light, .25); ctx.lineWidth=2; ctx.stroke();
     }
-    const dimmed = humanChoosing && game.mustCapture && game.blockedIds.has(tok.id);
+    const dimmed = humanChoosing && (game.blockedIds.has(tok.id) || (tok.frozen && tok.seat===curSeat()));
     drawToken(x,y,Rt,tok.seat,{alpha: tok.state==='done'?0.95 : dimmed?0.55 : 1});
   }
   // stack count badges
@@ -1128,9 +1155,21 @@ canvas.addEventListener('pointerdown', e=>{
     const d=Math.hypot(p.x-x,p.y-y);
     if(d<S*0.85 && d<bestD){ hitId=id; bestD=d; }
   }
-  if(!hitId) return;
+  if(!hitId){
+    for(const tok of tokensOf(curSeat())){
+      if(!tok.frozen) continue;
+      const pos=tokenXY(tok);
+      if(Math.hypot(pos.x-x,pos.y-y)<S*0.85){
+        toast('💤 That piece captured this turn — it rests until your next roll');
+        sfx.noMove(); break;
+      }
+    }
+    return;
+  }
   if(game.blockedIds.has(hitId) && !game.allowed.some(pr=>pr.act.t===hitId)){
-    toast('⚔ Capture is mandatory — that move would dodge it');
+    toast(game.blockReasons[hitId]==='waste'
+      ? '🎲 That would strand a die — you must play as many as you can'
+      : '⚔ Capture is mandatory — that move would dodge it');
     sfx.noMove();
     return;
   }
@@ -1309,7 +1348,7 @@ newGame();
 requestAnimationFrame(loop);
 // debug hook (handy in devtools / automated tests)
 window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
-  captureReachable, cloneToks, actionCaptureVictim, tokenById, doRoll, beginDispatch,
+  bestOutcome, cloneToks, actionCaptureVictim, tokenById, doRoll, beginDispatch,
   SEATS, START, TRACK};
 </script>
 </body>
