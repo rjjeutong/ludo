@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ludo — Night Carnival</title>
+<meta name="description" content="Classic Ludo with two twists: Prisoner rule and Wall rule. Play against the computer.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-deep:#100e22;
+  --bg-mid:#181534;
+  --panel:#201c41;
+  --panel-edge:#322b66;
+  --panel-soft:#2a2553;
+  --ink:#0b0918;
+  --text:#f2effc;
+  --text-dim:#b6aedd;
+  --text-faint:#7d75ab;
+  --crimson:#ef4f6e; --crimson-deep:#8f1330;
+  --emerald:#34c98a; --emerald-deep:#0c6b46;
+  --amber:#f6b83c;  --amber-deep:#8a5d07;
+  --cobalt:#5a85ff; --cobalt-deep:#1f3aa6;
+  --gold:#ffd479;
+  --font-display:'Baloo 2','Trebuchet MS',Verdana,sans-serif;
+  --font-body:'Nunito','Segoe UI',Tahoma,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(1100px 600px at 20% -10%, rgba(90,133,255,.14), transparent 60%),
+    radial-gradient(900px 700px at 95% 10%, rgba(239,79,110,.12), transparent 55%),
+    radial-gradient(800px 800px at 50% 115%, rgba(246,184,60,.08), transparent 55%),
+    linear-gradient(180deg,var(--bg-mid),var(--bg-deep) 70%);
+  background-attachment:fixed;
+  color:var(--text);
+  font-family:var(--font-body);
+  display:flex;flex-direction:column;align-items:center;
+  overflow-x:hidden;
+}
+body::before{ /* grain */
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+header{
+  width:100%;max-width:1060px;display:flex;align-items:center;gap:14px;
+  padding:14px 18px 4px;position:relative;z-index:2;
+}
+h1{
+  font-family:var(--font-display);font-weight:800;font-size:clamp(28px,5vw,42px);
+  letter-spacing:.06em;margin:0;line-height:1;
+  background:linear-gradient(100deg,var(--gold) 0%,#ff9d6e 45%,var(--crimson) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 10px rgba(246,184,60,.25));
+}
+h1 .spark{color:var(--gold);-webkit-text-fill-color:var(--gold);font-size:.5em;vertical-align:.55em;opacity:.9}
+.banner{
+  flex:1;display:flex;align-items:center;gap:10px;min-width:0;
+  font-weight:700;font-size:clamp(13px,2.4vw,16px);color:var(--text-dim);
+}
+.banner .chip{
+  width:14px;height:14px;border-radius:50%;flex:none;
+  box-shadow:0 0 10px 1px currentColor;background:currentColor;
+}
+.banner .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{
+  flex:none;width:42px;height:42px;border-radius:13px;cursor:pointer;
+  border:1px solid var(--panel-edge);
+  background:linear-gradient(180deg,var(--panel-soft),var(--panel));
+  color:var(--text-dim);font-size:19px;display:grid;place-items:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.07);
+  transition:transform .15s ease,color .15s ease;
+}
+.iconbtn:hover{transform:translateY(-1px) rotate(20deg);color:var(--text)}
+.layout{
+  position:relative;z-index:1;
+  display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;justify-content:center;
+  padding:10px 14px 30px;width:100%;max-width:1060px;
+}
+.board-wrap{
+  position:relative;border-radius:22px;padding:10px;
+  background:linear-gradient(160deg,#2b2658,#1a1738 60%,#221d49);
+  border:1px solid var(--panel-edge);
+  box-shadow:0 24px 60px -18px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.08),
+             0 0 70px -25px rgba(90,133,255,.35);
+}
+canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation}
+.panel{
+  display:flex;flex-direction:column;gap:14px;width:250px;flex:none;
+}
+.card{
+  background:linear-gradient(180deg,var(--panel-soft),var(--panel));
+  border:1px solid var(--panel-edge);border-radius:18px;padding:14px;
+  box-shadow:0 12px 32px -12px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.die-zone{display:flex;align-items:center;gap:14px}
+.die{
+  width:64px;height:64px;border-radius:15px;flex:none;position:relative;
+  background:linear-gradient(150deg,#fdfbff,#cfc8ee);
+  box-shadow:0 6px 16px rgba(0,0,0,.5), inset 0 -4px 8px rgba(60,40,120,.25), inset 0 2px 3px #fff;
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  padding:11px;gap:2px;cursor:pointer;transition:transform .12s ease;
+}
+.die.disabled{cursor:default;filter:saturate(.5) brightness(.8)}
+.die:not(.disabled):hover{transform:translateY(-2px) rotate(-4deg)}
+.die .pip{border-radius:50%;background:radial-gradient(circle at 35% 30%,#5a4f8f,#171231 70%);opacity:0;align-self:center;justify-self:center;width:80%;aspect-ratio:1}
+.die .pip.on{opacity:1}
+@keyframes tumble{
+  0%{transform:rotate(0) scale(1)} 20%{transform:rotate(95deg) scale(.86)}
+  45%{transform:rotate(200deg) scale(1.1)} 70%{transform:rotate(290deg) scale(.92)}
+  100%{transform:rotate(360deg) scale(1)}
+}
+.die.rolling{animation:tumble .62s ease-in-out}
+.roll-info{display:flex;flex-direction:column;gap:6px;min-width:0}
+.btn{
+  font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.04em;
+  padding:9px 18px;border-radius:13px;border:1px solid rgba(255,255,255,.14);cursor:pointer;
+  color:var(--ink);
+  background:linear-gradient(180deg,#ffe1a1,var(--gold) 45%,#e89b3c);
+  box-shadow:0 5px 16px -4px rgba(246,184,60,.55), inset 0 1px 0 rgba(255,255,255,.55);
+  transition:transform .12s ease,filter .12s ease;
+}
+.btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.06)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn:disabled{opacity:.38;cursor:default;filter:saturate(.4)}
+.btn.ghost{
+  color:var(--text-dim);background:linear-gradient(180deg,var(--panel-soft),var(--panel));
+  border:1px solid var(--panel-edge);box-shadow:none;
+}
+.btn.ghost:hover:not(:disabled){color:var(--text)}
+.hint{font-size:12.5px;color:var(--text-faint);line-height:1.35}
+.roster{display:flex;flex-direction:column;gap:8px}
+.prow{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:13px;
+  border:1px solid transparent;transition:all .25s ease;
+}
+.prow.active{
+  border-color:var(--panel-edge);background:rgba(255,255,255,.045);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05), 0 0 18px -6px var(--pc,#fff);
+}
+.prow .dot{
+  width:18px;height:18px;border-radius:50%;flex:none;background:var(--pc);
+  box-shadow:inset 0 -3px 5px rgba(0,0,0,.4), inset 0 2px 3px rgba(255,255,255,.5), 0 0 8px -1px var(--pc);
+}
+.prow .pname{font-weight:800;font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .mini{display:flex;gap:3px}
+.prow .mini i{
+  width:9px;height:9px;border-radius:50%;border:1.5px solid var(--pc);background:transparent;display:block;
+}
+.prow .mini i.track{background:color-mix(in srgb,var(--pc) 45%,transparent)}
+.prow .mini i.home{background:var(--pc)}
+.prow .mini i.done{background:var(--gold);border-color:var(--gold);box-shadow:0 0 6px var(--gold)}
+.prow .mini i.jail{border-style:dashed;opacity:.7}
+.prow .jailbadge{
+  font-size:11px;font-weight:800;color:var(--ink);background:var(--text-dim);
+  border-radius:8px;padding:1px 6px;flex:none;
+}
+.prow .think{display:none;gap:3px;flex:none}
+.prow.active.ai-turn .think{display:flex}
+.prow .think b{width:5px;height:5px;border-radius:50%;background:var(--text-dim);animation:blink 1s infinite}
+.prow .think b:nth-child(2){animation-delay:.2s}
+.prow .think b:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{
+  font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  padding:4px 10px;border-radius:99px;color:var(--text-dim);
+  border:1px dashed var(--panel-edge);
+}
+.pill.on{color:var(--gold);border:1px solid color-mix(in srgb,var(--gold) 45%,transparent);
+  background:color-mix(in srgb,var(--gold) 10%,transparent)}
+/* ---------- overlays / modals ---------- */
+.overlay{
+  position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:18px;
+  background:rgba(10,8,24,.66);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
+  opacity:0;pointer-events:none;transition:opacity .22s ease;
+}
+.overlay.show{opacity:1;pointer-events:auto}
+.modal{
+  width:min(430px,94vw);max-height:88vh;overflow:auto;border-radius:22px;padding:22px;
+  background:linear-gradient(170deg,#2c2659,#1d1940 65%);
+  border:1px solid var(--panel-edge);
+  box-shadow:0 40px 90px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.09);
+  transform:translateY(10px) scale(.97);transition:transform .22s ease;
+}
+.overlay.show .modal{transform:none}
+.modal h2{
+  font-family:var(--font-display);font-weight:800;letter-spacing:.04em;margin:0 0 4px;font-size:24px;
+  background:linear-gradient(100deg,var(--gold),#ff9d6e);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.modal .sub{color:var(--text-faint);font-size:13px;margin:0 0 16px}
+.setting{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid rgba(255,255,255,.06)}
+.setting:first-of-type{border-top:none}
+.setting .lab b{display:block;font-size:14.5px;font-weight:800}
+.setting .lab span{display:block;font-size:12px;color:var(--text-faint);margin-top:2px;line-height:1.35;max-width:240px}
+.seg{display:flex;gap:4px;background:var(--ink);padding:4px;border-radius:12px;flex:none}
+.seg button{
+  border:none;border-radius:9px;padding:6px 13px;cursor:pointer;font-family:var(--font-body);
+  font-weight:800;font-size:14px;color:var(--text-faint);background:transparent;transition:all .15s ease;
+}
+.seg button.sel{color:var(--ink);background:linear-gradient(180deg,#ffe1a1,var(--gold))}
+.toggle{position:relative;width:52px;height:29px;flex:none;cursor:pointer}
+.toggle input{position:absolute;opacity:0;inset:0;cursor:pointer;margin:0}
+.toggle .tr{
+  position:absolute;inset:0;border-radius:99px;background:var(--ink);
+  border:1px solid var(--panel-edge);transition:background .2s ease;
+}
+.toggle .th{
+  position:absolute;top:3.5px;left:4px;width:22px;height:22px;border-radius:50%;
+  background:linear-gradient(180deg,#cdc5f0,#938ac0);transition:all .2s ease;
+  box-shadow:0 2px 5px rgba(0,0,0,.5);
+}
+.toggle input:checked ~ .tr{background:color-mix(in srgb,var(--gold) 55%,var(--ink))}
+.toggle input:checked ~ .th{left:25px;background:linear-gradient(180deg,#fff3d4,var(--gold))}
+.modal .actions{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
+/* win modal */
+.win-modal{text-align:center}
+.win-modal .trophy{font-size:64px;line-height:1;margin:6px 0 2px;filter:drop-shadow(0 6px 18px rgba(246,184,60,.45));animation:bounceIn .6s cubic-bezier(.34,1.56,.64,1)}
+@keyframes bounceIn{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+.win-modal h2{font-size:30px}
+.win-modal .wname{font-weight:800;font-size:17px;margin:2px 0 18px}
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:60;
+  background:linear-gradient(180deg,#312a64,#241f4c);color:var(--text);
+  border:1px solid var(--panel-edge);border-radius:99px;padding:9px 20px;
+  font-weight:800;font-size:14px;box-shadow:0 12px 30px rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;transition:all .25s ease;white-space:nowrap;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+footer{z-index:1;color:var(--text-faint);font-size:12px;padding:0 0 20px;text-align:center}
+footer a{color:var(--text-dim)}
+@media (max-width:720px){
+  .layout{gap:14px}
+  .panel{width:100%;max-width:480px;flex-direction:column}
+  header{padding:12px 14px 2px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LUDO<span class="spark"> ✦</span></h1>
+  <div class="banner"><span class="chip" id="turnChip"></span><span class="msg" id="turnMsg">Loading…</span></div>
+  <button class="iconbtn" id="gearBtn" title="Settings" aria-label="Settings">⚙</button>
+</header>
+
+<main class="layout">
+  <div class="board-wrap"><canvas id="board"></canvas></div>
+  <aside class="panel">
+    <div class="card die-zone">
+      <div class="die disabled" id="die" title="Die"></div>
+      <div class="roll-info">
+        <button class="btn" id="rollBtn" disabled>Roll</button>
+        <div class="hint" id="rollHint">Roll a 6 to leave base.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="roster" id="roster"></div>
+    </div>
+    <div class="card">
+      <div class="pills">
+        <span class="pill" id="pillPrisoner">Prisoner rule</span>
+        <span class="pill" id="pillWall">Wall rule</span>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<footer>First to bring all four tokens home wins · <a href="#" id="rulesLink">rules</a></footer>
+<div id="toast"></div>
+
+<!-- settings -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2>Settings</h2>
+    <p class="sub">Rule changes apply immediately. Opponent count starts a new game.</p>
+    <div class="setting">
+      <div class="lab"><b>AI opponents</b><span>You always play Crimson.</span></div>
+      <div class="seg" id="aiSeg">
+        <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Prisoner rule</b><span>Captured tokens are caged beside the capturer's base. Roll a 6 to free one (that 6 is spent).</span></div>
+      <label class="toggle"><input type="checkbox" id="optPrisoner"><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Wall rule</b><span>Two of your tokens on one square form a wall. Nobody may pass over or land on it.</span></div>
+      <label class="toggle"><input type="checkbox" id="optWall"><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Sound</b><span>Dice, moves, captures &amp; fanfares.</span></div>
+      <label class="toggle"><input type="checkbox" id="optSound" checked><span class="tr"></span><span class="th"></span></label>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="newGameBtn">New Game</button>
+      <button class="btn" id="closeSettings">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- win -->
+<div class="overlay" id="winOverlay">
+  <div class="modal win-modal">
+    <div class="trophy" id="winEmoji">🏆</div>
+    <h2 id="winTitle">Victory!</h2>
+    <div class="wname" id="winName"></div>
+    <div class="actions" style="justify-content:center">
+      <button class="btn" id="againBtn">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================================
+   LUDO — Night Carnival
+   Single-file game. Sections: constants/geometry · settings · state ·
+   rules engine · turn engine (seat controllers) · AI · sound · render ·
+   input · UI/modals · boot.
+   ========================================================================= */
+
+/* ---------- constants & geometry ---------- */
+const N = 15;                       // board is 15×15 cells
+const SEATS = [
+  {key:'crimson', label:'Crimson', main:'#ef4f6e', deep:'#8f1330', light:'#ff8aa0', base:{c:0,r:9},  dir:{dx:0,dy:-1}},
+  {key:'emerald', label:'Emerald', main:'#34c98a', deep:'#0c6b46', light:'#8aeec4', base:{c:0,r:0},  dir:{dx:1,dy:0}},
+  {key:'amber',   label:'Amber',   main:'#f6b83c', deep:'#8a5d07', light:'#ffdf96', base:{c:9,r:0},  dir:{dx:0,dy:1}},
+  {key:'cobalt',  label:'Cobalt',  main:'#5a85ff', deep:'#1f3aa6', light:'#a4bcff', base:{c:9,r:9},  dir:{dx:-1,dy:0}},
+];
+const START = [0,13,26,39];         // each seat's entry square (absolute track index)
+const TRACK = [];                   // 52 cells, clockwise, index 0 = Crimson's entry (6,13)
+(function buildTrack(){
+  const seg=(c,r,dc,dr,n)=>{for(let i=0;i<n;i++)TRACK.push({c:c+dc*i, r:r+dr*i});};
+  seg(6,13, 0,-1,5);  seg(5,8,-1,0,6);  seg(0,7, 0,-1,2);  seg(1,6, 1,0,5);
+  seg(6,5,  0,-1,6);  seg(7,0, 1,0,2);  seg(8,1, 0, 1,5);  seg(9,6, 1,0,6);
+  seg(14,7, 0, 1,2);  seg(13,8,-1,0,5); seg(8,9, 0, 1,6);  seg(7,14,-1,0,2);
+})();
+const SAFE = new Set([0,8,13,21,26,34,39,47]);   // entries + stars (absolute)
+const STARS = new Set([8,21,34,47]);
+function homeCell(p,h){              // home-column cells, h = 0..4 (5th step = finished)
+  switch(p){
+    case 0: return {c:7,    r:13-h};
+    case 1: return {c:1+h,  r:7};
+    case 2: return {c:7,    r:1+h};
+    case 3: return {c:13-h, r:7};
+  }
+}
+const BASE_SLOTS = [[2,2],[4,2],[2,4],[4,4]];    // token nests inside each 6×6 base
+const relOf = (p,abs)=>(abs-START[p]+52)%52;
+const absOf = (p,rel)=>(START[p]+rel)%52;
+
+/* ---------- settings (persisted) ---------- */
+const settings = Object.assign(
+  {aiCount:3, prisoner:false, wall:false, sound:true},
+  JSON.parse(localStorage.getItem('ludo-settings')||'{}')
+);
+const saveSettings = ()=>localStorage.setItem('ludo-settings', JSON.stringify(settings));
+
+/* ---------- game state ---------- */
+const game = {
+  order:[],        // active seat indices, turn order (clockwise)
+  turn:0,          // index into order
+  tokens:[],       // all tokens of active seats
+  die:null,
+  phase:'idle',    // idle | rolling | choosing | animating | over
+  actions:[],      // legal actions for the current roll
+  winner:null,
+};
+const seatActive = p => game.order.includes(p);
+const curSeat = ()=> game.order[game.turn];
+// Seat controllers: 'human' | 'ai'. Pass-and-play = more 'human' seats;
+// online = a future 'remote' controller fed by serialized actions.
+const controllers = [];
+const isAI = p => controllers[p]==='ai';
+
+function newGame(){
+  game.order = [[0,2],[0,1,2],[0,1,2,3]][settings.aiCount-1];
+  controllers.length = 0;
+  for(let p=0;p<4;p++) controllers[p] = (p===0?'human':'ai');
+  game.tokens = [];
+  for(const p of game.order)
+    for(let s=0;s<4;s++)
+      game.tokens.push({id:`${p}-${s}`, seat:p, slot:s, state:'base', trackIdx:-1, homeIdx:-1, heldBy:-1});
+  game.turn=0; game.die=null; game.phase='idle'; game.actions=[]; game.winner=null;
+  anim=null; effects.length=0;
+  hideOverlay(winOverlay);
+  updateRoster(); updatePills();
+  startTurn();
+}
+const tokensOf = p => game.tokens.filter(t=>t.seat===p);
+const jailedBy = p => game.tokens.filter(t=>t.state==='jail' && t.heldBy===p);
+
+/* ---------- rules engine (pure-ish helpers) ---------- */
+function tokensAtTrack(idx, except){
+  return game.tokens.filter(t=>t!==except && t.state==='track' && t.trackIdx===idx);
+}
+function tokensAtHome(p,h){
+  return game.tokens.filter(t=>t.state==='home' && t.seat===p && t.homeIdx===h);
+}
+function isWallCell(cell, except){   // ≥2 same-color tokens ⇒ wall (wall rule only)
+  let list;
+  if(cell.kind==='track') list = tokensAtTrack(cell.idx, except);
+  else list = tokensAtHome(cell.p, cell.h).filter(t=>t!==except);
+  const byCol={};
+  for(const t of list){ byCol[t.seat]=(byCol[t.seat]||0)+1; if(byCol[t.seat]>=2) return true; }
+  return false;
+}
+// Path of cells a token steps through for `roll`. Last cell is the destination
+// ({kind:'done'} when the token finishes — overshoot allowed). null = illegal.
+function pathFor(tok, roll){
+  const p = tok.seat, cells = [];
+  if(tok.state==='track'){
+    const rel = relOf(p, tok.trackIdx);
+    for(let s=1;s<=roll;s++){
+      const r = rel+s;
+      if(r<=50) cells.push({kind:'track', idx:absOf(p,r)});
+      else { const h=r-51; if(h<=4) cells.push({kind:'home', p, h}); else {cells.push({kind:'done'}); break;} }
+    }
+  } else if(tok.state==='home'){
+    for(let s=1;s<=roll;s++){
+      const h = tok.homeIdx+s;
+      if(h<=4) cells.push({kind:'home', p, h}); else {cells.push({kind:'done'}); break;}
+    }
+  } else return null;
+  if(settings.wall){
+    for(const c of cells) if(c.kind!=='done' && isWallCell(c, tok)) return null;
+  }
+  return cells;
+}
+// Serializable actions — {type:'enter'|'move'|'free', t:tokenId} — so a future
+// online mode can transmit and replay them verbatim.
+function legalActions(p, roll){
+  const acts=[];
+  for(const tok of tokensOf(p)){
+    if(tok.state==='base'){
+      if(roll===6){
+        const entry={kind:'track', idx:START[p]};
+        if(!(settings.wall && isWallCell(entry, tok))) acts.push({type:'enter', t:tok.id});
+      }
+    } else if(tok.state==='jail'){
+      if(roll===6 && settings.prisoner) acts.push({type:'free', t:tok.id});
+    } else if(tok.state==='track' || tok.state==='home'){
+      const path = pathFor(tok, roll);
+      if(path) acts.push({type:'move', t:tok.id, path});
+    }
+  }
+  return acts;
+}
+const tokenById = id => game.tokens.find(t=>t.id===id);
+
+/* ---------- turn engine ---------- */
+function startTurn(){
+  game.die=null; game.phase='idle'; game.actions=[];
+  updateRoster(); updateBanner(); updateDie();
+  if(isAI(curSeat())) setTimeout(()=>{ if(game.phase==='idle') doRoll(); }, 800);
+}
+function doRoll(){
+  if(game.phase!=='idle') return;
+  game.phase='rolling';
+  updateDie(); updateBanner();
+  sfx.roll();
+  const v = 1 + Math.floor(Math.random()*6);
+  dieEl.classList.add('rolling');
+  let flicks = 0;
+  const flick = setInterval(()=>{ setDieFace(1+Math.floor(Math.random()*6)); if(++flicks>6) clearInterval(flick); }, 80);
+  setTimeout(()=>{
+    clearInterval(flick);
+    dieEl.classList.remove('rolling');
+    game.die = v; setDieFace(v);
+    if(v===6) sfx.six();
+    afterRoll();
+  }, 640);
+}
+function afterRoll(){
+  const p = curSeat();
+  game.actions = legalActions(p, game.die);
+  updateRoster();
+  if(game.actions.length===0){
+    game.phase='animating';
+    toast(`${seatName(p)} — no moves`);
+    sfx.noMove();
+    setTimeout(endOfAction, 950);
+    return;
+  }
+  game.phase='choosing';
+  updateBanner();
+  if(isAI(p)) setTimeout(()=>performAction(aiPick(p, game.actions)), 560);
+  else if(settings.prisoner && game.die===6 && game.actions.some(a=>a.type==='free'))
+    toast('You rolled a 6 — move, deploy, or free a prisoner');
+}
+function performAction(act){
+  if(game.phase!=='choosing') return;
+  game.phase='animating'; game.actions=[];
+  const tok = tokenById(act.t), p = tok.seat;
+  if(act.type==='enter'){
+    const from = tokenXY(tok);
+    tok.state='track'; tok.trackIdx=START[p]; tok.homeIdx=-1;
+    sfx.enter();
+    animate(tok, [from, cellXY({kind:'track', idx:START[p]})], ()=>{ resolveLanding(tok); finishAction(); });
+  } else if(act.type==='free'){
+    const from = tokenXY(tok);
+    tok.state='base'; tok.heldBy=-1; tok.trackIdx=-1; tok.homeIdx=-1;
+    sfx.free();
+    toast(`${seatName(p)} freed a prisoner`);
+    animate(tok, [from, tokenXY(tok)], finishAction);
+  } else { // move
+    const from = tokenXY(tok);
+    const path = act.path;
+    const pts = [from, ...path.map(c=>cellXY(c))];
+    const last = path[path.length-1];
+    // commit logical state up-front; renderer hides the token while animating
+    if(last.kind==='done'){ tok.state='done'; tok.trackIdx=-1; tok.homeIdx=-1; }
+    else if(last.kind==='home'){ tok.state='home'; tok.homeIdx=last.h; tok.trackIdx=-1; }
+    else { tok.state='track'; tok.trackIdx=last.idx; tok.homeIdx=-1; }
+    animate(tok, pts, ()=>{
+      if(last.kind==='track') resolveLanding(tok);
+      if(last.kind==='done'){
+        sfx.finish(); ping(cellXY({kind:'done'}), '#ffd479');
+        toast(`${seatName(p)} brought a token home!`);
+      }
+      finishAction();
+    });
+  }
+}
+function resolveLanding(tok){
+  const idx = tok.trackIdx;
+  if(SAFE.has(idx)) return;
+  const enemies = tokensAtTrack(idx, tok).filter(t=>t.seat!==tok.seat);
+  if(enemies.length!==1) return;          // only a lone opponent token is captured
+  const victim = enemies[0];
+  ping(cellXY({kind:'track', idx}), SEATS[victim.seat].main);
+  if(settings.prisoner){
+    victim.state='jail'; victim.heldBy=tok.seat; victim.trackIdx=-1;
+    sfx.jail();
+    toast(`${seatName(tok.seat)} took ${seatName(victim.seat)}'s token prisoner!`);
+  } else {
+    victim.state='base'; victim.trackIdx=-1;
+    sfx.capture();
+    toast(`${seatName(tok.seat)} captured ${seatName(victim.seat)}!`);
+  }
+}
+function finishAction(){
+  const p = curSeat();
+  if(tokensOf(p).every(t=>t.state==='done')){
+    game.winner=p; game.phase='over';
+    updateRoster(); updateBanner();
+    setTimeout(showWin, 700);
+    return;
+  }
+  updateRoster();
+  endOfAction();
+}
+function endOfAction(){
+  if(game.winner!=null) return;
+  if(game.die===6){ startTurn(); return; }   // extra roll on a 6, same seat
+  game.turn = (game.turn+1) % game.order.length;
+  startTurn();
+}
+
+/* ---------- AI (heuristic scoring over legal actions) ---------- */
+function dangerAt(p, absIdx){
+  if(SAFE.has(absIdx)) return 0;
+  let d=0;
+  for(const t of game.tokens){
+    if(t.seat===p || t.state!=='track') continue;
+    const dist=(absIdx - t.trackIdx + 52)%52;
+    if(dist>=1 && dist<=6 && relOf(t.seat, t.trackIdx)+dist<=50) d++;
+  }
+  return d;
+}
+function aiPick(p, acts){
+  let best=null, bestScore=-1e9;
+  for(const a of acts){
+    const s = aiScore(p, a);
+    if(s>bestScore){ bestScore=s; best=a; }
+  }
+  return best;
+}
+function aiScore(p, act){
+  const jitter = Math.random()*2;
+  if(act.type==='free')  return 30 + 4*jailedBy(0).length*0 + jitter + (tokensOf(p).filter(t=>t.state==='jail').length>1?6:0);
+  if(act.type==='enter') return 26 + jitter;
+  const tok = tokenById(act.t);
+  const last = act.path[act.path.length-1];
+  const relNow = tok.state==='track' ? relOf(p,tok.trackIdx) : 51+tok.homeIdx;
+  let s = jitter + relNow*0.1;                       // slight bias: advance the leader
+  if(last.kind==='done') return s+42;
+  if(last.kind==='home') return s + (tok.state==='track'?26:10) + last.h;
+  const dest = last.idx;
+  const enemies = tokensAtTrack(dest, tok).filter(t=>t.seat!==p);
+  if(enemies.length===1 && !SAFE.has(dest)){
+    const vRel = relOf(enemies[0].seat, enemies[0].trackIdx);
+    s += 40 + vRel*0.25 + (settings.prisoner?12:0);  // jailing hurts more
+  }
+  if(SAFE.has(dest)) s += 10;
+  if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*9;   // fleeing danger
+  const dNew = dangerAt(p, dest);
+  s -= dNew*11 + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
+  if(settings.wall){
+    const own = tokensAtTrack(dest, tok).filter(t=>t.seat===p);
+    if(own.length===1) s += 7;                       // forming a wall
+    if(tok.state==='track' && tokensAtTrack(tok.trackIdx, tok).some(t=>t.seat===p)) s -= 3; // breaking one
+  }
+  return s;
+}
+
+/* ---------- sound (Web Audio, no files) ---------- */
+let actx=null;
+function ac(){ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); return actx; }
+function tone(f, dur=0.12, type='sine', gain=0.16, delay=0, f2=null){
+  if(!settings.sound) return;
+  try{
+    const a=ac(), t0=a.currentTime+delay;
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t0);
+    if(f2) o.frequency.exponentialRampToValueAtTime(f2, t0+dur);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(gain,t0+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g).connect(a.destination);
+    o.start(t0); o.stop(t0+dur+0.05);
+  }catch(e){}
+}
+const sfx = {
+  roll(){ for(let i=0;i<5;i++) tone(280+Math.random()*420, .045, 'square', .05, i*.09); },
+  six(){ tone(880,.1,'sine',.14,.0); tone(1175,.16,'sine',.14,.09); },
+  step(){ tone(700,.045,'sine',.06); },
+  enter(){ tone(420,.08,'triangle',.14); tone(640,.1,'triangle',.12,.07); },
+  capture(){ tone(520,.09,'triangle',.18); tone(245,.18,'triangle',.16,.08); },
+  jail(){ tone(190,.1,'sawtooth',.15); tone(120,.16,'square',.12,.07); tone(95,.2,'square',.08,.15); },
+  free(){ tone(523,.09,'sine',.14); tone(660,.09,'sine',.14,.08); tone(880,.14,'sine',.14,.16); },
+  finish(){ tone(660,.1,'sine',.16); tone(830,.1,'sine',.16,.09); tone(990,.18,'sine',.16,.18); },
+  noMove(){ tone(220,.14,'sine',.1,0,160); },
+  win(){ [523,659,784,1047].forEach((f,i)=>tone(f,.22,'sine',.17,i*.16)); },
+  lose(){ [392,330,262].forEach((f,i)=>tone(f,.25,'sine',.13,i*.2)); },
+};
+
+/* ---------- rendering ---------- */
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+let S = 36;                          // cell size in CSS px
+let anim = null;                     // {tok, pts, seg, t0}
+const effects = [];                  // expanding rings
+const STEP_MS = 150;
+
+function resize(){
+  const pad = 48, headH = 86;
+  const avail = Math.min(640, window.innerWidth-pad, window.innerHeight-headH-120);
+  const size = Math.max(290, avail);
+  S = size/N;
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = Math.round(size*dpr); canvas.height = Math.round(size*dpr);
+  canvas.style.width = size+'px'; canvas.style.height = size+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+const px = (c)=> (c+0.5)*S;          // cell -> center pixel
+function cellXY(cell){
+  if(cell.kind==='track'){ const t=TRACK[cell.idx]; return {x:px(t.c), y:px(t.r)}; }
+  if(cell.kind==='home'){ const h=homeCell(cell.p, cell.h); return {x:px(h.c), y:px(h.r)}; }
+  return {x:px(7), y:px(7)};         // done -> board center
+}
+function baseSlotXY(p, slot){
+  const b=SEATS[p].base, s=BASE_SLOTS[slot];
+  return {x:px(b.c+s[0]), y:px(b.r+s[1])};
+}
+function jailSpotXY(holder, k){
+  const b=SEATS[holder].base;
+  return {x:px(b.c+1)+k*S*0.95, y:px(b.r+5)-S*0.45+ (holder===1||holder===2 ? 0 : 0)};
+}
+function tokenXY(tok){               // logical screen position (incl. stack fan)
+  if(tok.state==='base') return baseSlotXY(tok.seat, tok.slot);
+  if(tok.state==='jail'){
+    const k = jailedBy(tok.heldBy).indexOf(tok);
+    return jailSpotXY(tok.heldBy, Math.max(0,k));
+  }
+  if(tok.state==='done'){
+    const b=SEATS[tok.seat].base, d=SEATS[tok.seat].dir;
+    return {x:px(7)+d.dx*0+ (tok.seat===1?-S*.85:tok.seat===3?S*.85:((tok.slot%2)-.5)*S*.7),
+            y:px(7)+ (tok.seat===0?S*.85:tok.seat===2?-S*.85:((tok.slot%2)-.5)*S*.7)};
+  }
+  let cell, mates;
+  if(tok.state==='track'){ cell=cellXY({kind:'track', idx:tok.trackIdx}); mates=tokensAtTrack(tok.trackIdx).filter(t=>!isAnim(t)); }
+  else { cell=cellXY({kind:'home', p:tok.seat, h:tok.homeIdx}); mates=tokensAtHome(tok.seat,tok.homeIdx).filter(t=>!isAnim(t)); }
+  if(mates.length<=1) return cell;
+  const i = mates.indexOf(tok);
+  const off = (i-(mates.length-1)/2)*S*0.22;
+  return {x:cell.x+off, y:cell.y-Math.abs(off)*0.25};
+}
+const isAnim = t => anim && anim.tok===t;
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x,y,w,h,r) : ctx.rect(x,y,w,h); }
+function drawStar(x,y,R){
+  ctx.beginPath();
+  for(let i=0;i<10;i++){
+    const a=-Math.PI/2 + i*Math.PI/5, rad=(i%2===0)?R:R*0.45;
+    const X=x+Math.cos(a)*rad, Y=y+Math.sin(a)*rad;
+    i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);
+  }
+  ctx.closePath();
+}
+function drawToken(x,y,R,seat,opts={}){
+  const c=SEATS[seat];
+  ctx.save();
+  if(opts.alpha!=null) ctx.globalAlpha=opts.alpha;
+  // shadow
+  ctx.beginPath(); ctx.ellipse(x, y+R*0.55, R*0.85, R*0.4, 0, 0, Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fill();
+  // body
+  const g=ctx.createRadialGradient(x-R*0.35, y-R*0.45, R*0.15, x, y, R*1.15);
+  g.addColorStop(0, c.light); g.addColorStop(0.45, c.main); g.addColorStop(1, c.deep);
+  ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  ctx.lineWidth=Math.max(1.2,R*0.14); ctx.strokeStyle='rgba(10,6,20,.55)'; ctx.stroke();
+  // inner ring + gloss
+  ctx.beginPath(); ctx.arc(x,y,R*0.55,0,Math.PI*2);
+  ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=R*0.1; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(x-R*0.3, y-R*0.42, R*0.3, R*0.16, -0.6, 0, Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.fill();
+  ctx.restore();
+}
+function drawCage(x,y,R,seat){
+  drawToken(x,y,R*0.8,seat,{alpha:.9});
+  ctx.save();
+  ctx.strokeStyle='rgba(235,230,255,.8)'; ctx.lineWidth=Math.max(1,R*0.13);
+  ctx.beginPath(); ctx.arc(x,y,R,0,Math.PI*2); ctx.stroke();
+  for(let i=-1;i<=1;i++){
+    const dx=i*R*0.55, h=Math.sqrt(Math.max(0,R*R-dx*dx));
+    ctx.beginPath(); ctx.moveTo(x+dx,y-h); ctx.lineTo(x+dx,y+h); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function draw(now){
+  const size=N*S;
+  ctx.clearRect(0,0,size,size);
+  // board felt
+  const bg=ctx.createLinearGradient(0,0,size,size);
+  bg.addColorStop(0,'#23204a'); bg.addColorStop(.5,'#1b1838'); bg.addColorStop(1,'#221e49');
+  rr(0,0,size,size,S*0.5); ctx.fillStyle=bg; ctx.fill();
+  // center soft glow
+  const glow=ctx.createRadialGradient(px(7),px(7),S*0.5,px(7),px(7),S*6);
+  glow.addColorStop(0,'rgba(255,212,121,.10)'); glow.addColorStop(1,'rgba(255,212,121,0)');
+  ctx.fillStyle=glow; ctx.fillRect(0,0,size,size);
+
+  drawBases();
+  drawTrackCells();
+  drawHomeColumns();
+  drawCenter();
+  drawEffects(now);
+  drawTokens(now);
+  drawAnim(now);
+}
+function drawBases(){
+  for(let p=0;p<4;p++){
+    const c=SEATS[p], b=c.base, X=b.c*S, Y=b.r*S, W=6*S;
+    const active=seatActive(p);
+    ctx.save();
+    if(!active) ctx.globalAlpha=.35;
+    const g=ctx.createLinearGradient(X,Y,X+W,Y+W);
+    g.addColorStop(0, c.main); g.addColorStop(1, c.deep);
+    rr(X+S*0.18, Y+S*0.18, W-S*0.36, W-S*0.36, S*0.55);
+    ctx.fillStyle=g; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.stroke();
+    // inner court
+    rr(X+S*0.85, Y+S*0.85, W-S*1.7, W-S*1.7, S*0.45);
+    ctx.fillStyle='rgba(13,10,28,.78)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=1; ctx.stroke();
+    // nests
+    for(const s of BASE_SLOTS){
+      const x=px(b.c+s[0]), y=px(b.r+s[1]);
+      ctx.beginPath(); ctx.arc(x,y,S*0.42,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.13)'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+function drawTrackCells(){
+  for(let i=0;i<52;i++){
+    const t=TRACK[i], x=t.c*S, y=t.r*S;
+    rr(x+1.5, y+1.5, S-3, S-3, S*0.22);
+    let fill='rgba(48,43,92,.85)', stroke='rgba(255,255,255,.07)';
+    const entrySeat = START.indexOf(i);
+    if(entrySeat>=0){
+      fill = hexA(SEATS[entrySeat].main, .8);
+      stroke = 'rgba(255,255,255,.25)';
+    }
+    ctx.fillStyle=fill; ctx.fill();
+    ctx.strokeStyle=stroke; ctx.lineWidth=1; ctx.stroke();
+    if(STARS.has(i)){
+      drawStar(px(t.c), px(t.r), S*0.3);
+      ctx.fillStyle='rgba(255,225,160,.32)'; ctx.fill();
+      ctx.strokeStyle='rgba(255,225,160,.5)'; ctx.lineWidth=1; ctx.stroke();
+    }
+    if(entrySeat>=0){ // direction chevron
+      const d=SEATS[entrySeat].dir, cx=px(t.c), cy=px(t.r);
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(d.dy,d.dx));
+      ctx.beginPath(); ctx.moveTo(-S*0.12,-S*0.18); ctx.lineTo(S*0.14,0); ctx.lineTo(-S*0.12,S*0.18);
+      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+function drawHomeColumns(){
+  for(let p=0;p<4;p++){
+    for(let h=0;h<5;h++){
+      const c=homeCell(p,h), x=c.c*S, y=c.r*S;
+      rr(x+1.5,y+1.5,S-3,S-3,S*0.22);
+      ctx.fillStyle=hexA(SEATS[p].main, seatActive(p)?.32:.12); ctx.fill();
+      ctx.strokeStyle=hexA(SEATS[p].main,.4); ctx.lineWidth=1; ctx.stroke();
+    }
+  }
+}
+function drawCenter(){
+  const x0=6*S, y0=6*S, x1=9*S, y1=9*S, cx=px(7), cy=px(7);
+  const tri=(a,b,seat)=>{
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.lineTo(cx,cy); ctx.closePath();
+    const g=ctx.createLinearGradient(a[0],a[1],cx,cy);
+    g.addColorStop(0,hexA(SEATS[seat].main,.95)); g.addColorStop(1,hexA(SEATS[seat].deep,.95));
+    ctx.fillStyle=g; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1; ctx.stroke();
+  };
+  tri([x0,y1],[x1,y1],0);  // bottom -> crimson
+  tri([x0,y0],[x0,y1],1);  // left   -> emerald
+  tri([x0,y0],[x1,y0],2);  // top    -> amber
+  tri([x1,y0],[x1,y1],3);  // right  -> cobalt
+  ctx.beginPath(); ctx.arc(cx,cy,S*0.52,0,Math.PI*2);
+  const g=ctx.createRadialGradient(cx-S*0.15,cy-S*0.2,S*0.05,cx,cy,S*0.55);
+  g.addColorStop(0,'#fff2cf'); g.addColorStop(1,'#e9a93f');
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1.5; ctx.stroke();
+  drawStar(cx,cy,S*0.26); ctx.fillStyle='rgba(140,80,10,.65)'; ctx.fill();
+}
+function drawEffects(now){
+  for(let i=effects.length-1;i>=0;i--){
+    const e=effects[i], t=(now-e.t0)/520;
+    if(t>=1){ effects.splice(i,1); continue; }
+    ctx.beginPath(); ctx.arc(e.x,e.y,S*(0.3+t*1.1),0,Math.PI*2);
+    ctx.strokeStyle=hexA(e.color, (1-t)*0.8); ctx.lineWidth=3*(1-t)+1; ctx.stroke();
+  }
+}
+function drawTokens(now){
+  const R=S*0.36;
+  const actionable = new Set(game.phase==='choosing' && !isAI(curSeat()) ? game.actions.map(a=>a.t) : []);
+  const pulse = 0.5+0.5*Math.sin(now/280);
+  // base + track + home tokens (sorted so lower rows draw later: nicer overlap)
+  const sorted=[...game.tokens].sort((a,b)=>tokenXY(a).y-tokenXY(b).y);
+  for(const tok of sorted){
+    if(isAnim(tok) || tok.state==='jail') continue;
+    const {x,y}=tokenXY(tok);
+    const Rt = tok.state==='done' ? R*0.55 : R;
+    if(actionable.has(tok.id)){
+      ctx.beginPath(); ctx.arc(x,y,Rt+3.5+pulse*2.5,0,Math.PI*2);
+      ctx.strokeStyle=hexA(SEATS[tok.seat].light, .5+pulse*0.45); ctx.lineWidth=3; ctx.stroke();
+    }
+    drawToken(x,y,Rt,tok.seat,{alpha: tok.state==='done'?0.95:1});
+  }
+  // stack count badges
+  const counted=new Set();
+  for(const tok of game.tokens){
+    if(tok.state!=='track' || isAnim(tok)) continue;
+    const key=tok.trackIdx;
+    if(counted.has(key)) continue; counted.add(key);
+    const here=tokensAtTrack(key).filter(t=>!isAnim(t));
+    if(here.length>=3){
+      const {x,y}=cellXY({kind:'track', idx:key});
+      ctx.beginPath(); ctx.arc(x+S*0.3,y-S*0.32,S*0.16,0,Math.PI*2);
+      ctx.fillStyle='#16122e'; ctx.fill();
+      ctx.fillStyle='#ffd479'; ctx.font=`800 ${S*0.24}px ${'Nunito'}`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(here.length, x+S*0.3, y-S*0.31);
+    }
+  }
+  // jailed tokens (caged, next to capturer's base)
+  for(const p of game.order){
+    const js=jailedBy(p);
+    js.forEach((tok,k)=>{
+      const {x,y}=jailSpotXY(p,k);
+      if(actionable.has(tok.id)){
+        ctx.beginPath(); ctx.arc(x,y,S*0.34+pulse*2.5,0,Math.PI*2);
+        ctx.strokeStyle=hexA(SEATS[tok.seat].light,.5+pulse*.45); ctx.lineWidth=3; ctx.stroke();
+      }
+      drawCage(x,y,S*0.28,tok.seat);
+    });
+  }
+}
+function drawAnim(now){
+  if(!anim) return;
+  const seg = anim.seg, pts=anim.pts;
+  const t = Math.min(1,(now-anim.t0)/STEP_MS);
+  const a=pts[seg], b=pts[seg+1];
+  const x=a.x+(b.x-a.x)*t, y=a.y+(b.y-a.y)*t - Math.sin(t*Math.PI)*S*0.4;
+  drawToken(x,y,S*0.38,anim.tok.seat);
+  if(t>=1){
+    if(seg+2<pts.length){
+      anim.seg++; anim.t0=now;
+      if(pts.length>2) sfx.step();
+    } else {
+      const done=anim.done; anim=null;
+      done && done();
+    }
+  }
+}
+function animate(tok, pts, done){
+  anim={tok, pts, seg:0, t0:performance.now(), done};
+}
+function ping(pt,color){ effects.push({x:pt.x,y:pt.y,color,t0:performance.now()}); }
+function hexA(hex,a){
+  const n=parseInt(hex.slice(1),16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function loop(now){ draw(now); requestAnimationFrame(loop); }
+
+/* ---------- input ---------- */
+canvas.addEventListener('pointerdown', e=>{
+  if(game.phase!=='choosing' || isAI(curSeat())) return;
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  let best=null, bestD=1e9;
+  for(const a of game.actions){
+    const tok=tokenById(a.t), p=tokenXY(tok);
+    const d=Math.hypot(p.x-x,p.y-y);
+    if(d<S*0.85 && d<bestD){ best=a; bestD=d; }
+  }
+  if(best) performAction(best);
+});
+canvas.addEventListener('pointermove', e=>{
+  if(game.phase!=='choosing' || isAI(curSeat())){ canvas.style.cursor='default'; return; }
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const hit=game.actions.some(a=>{
+    const p=tokenXY(tokenById(a.t));
+    return Math.hypot(p.x-x,p.y-y)<S*0.85;
+  });
+  canvas.style.cursor=hit?'pointer':'default';
+});
+
+/* ---------- UI ---------- */
+const dieEl=document.getElementById('die');
+const rollBtn=document.getElementById('rollBtn');
+const rollHint=document.getElementById('rollHint');
+const turnChip=document.getElementById('turnChip');
+const turnMsg=document.getElementById('turnMsg');
+const rosterEl=document.getElementById('roster');
+const toastEl=document.getElementById('toast');
+const settingsOverlay=document.getElementById('settingsOverlay');
+const winOverlay=document.getElementById('winOverlay');
+const PIP_MAP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+(function buildDie(){ for(let i=0;i<9;i++){ const d=document.createElement('span'); d.className='pip'; dieEl.appendChild(d);} setDieFace(6); })();
+function setDieFace(v){
+  const pips=dieEl.children;
+  for(let i=0;i<9;i++) pips[i].classList.toggle('on', PIP_MAP[v].includes(i));
+}
+const seatName = p => controllers[p]==='human' ? 'You' : SEATS[p].label;
+function updateDie(){
+  const humanIdle = game.phase==='idle' && !isAI(curSeat()) && game.winner==null;
+  rollBtn.disabled = !humanIdle;
+  dieEl.classList.toggle('disabled', !humanIdle);
+}
+function updateBanner(){
+  const p=curSeat?.()!=null?curSeat():0;
+  turnChip.style.color = SEATS[p].main;
+  let msg;
+  if(game.winner!=null) msg = `${seatName(game.winner)} won the game!`;
+  else if(isAI(p)) msg = game.phase==='choosing' ? `${seatName(p)} is choosing…` : `${seatName(p)} is rolling…`;
+  else if(game.phase==='choosing') msg = game.actions.length>1 ? 'Your turn — pick a glowing token' : 'Your turn — tap the glowing token';
+  else msg = 'Your turn — roll the die!';
+  turnMsg.textContent=msg;
+  rollHint.textContent = game.die!=null ? `Rolled a ${game.die}${game.die===6?' — roll again after moving!':''}` : 'Roll a 6 to leave base.';
+}
+function updateRoster(){
+  rosterEl.innerHTML='';
+  for(const p of game.order){
+    const row=document.createElement('div');
+    row.className='prow'+(p===curSeat()&&game.winner==null?' active':'')+(isAI(p)?' ai-turn':'');
+    row.style.setProperty('--pc', SEATS[p].main);
+    const minis = tokensOf(p).map(t=>`<i class="${t.state}"></i>`).join('');
+    const held = jailedBy(p).length;
+    row.innerHTML=`<span class="dot"></span><span class="pname">${seatName(p)}</span>
+      <span class="mini">${minis}</span>
+      ${held?`<span class="jailbadge" title="prisoners held">⛓${held}</span>`:''}
+      <span class="think"><b></b><b></b><b></b></span>`;
+    rosterEl.appendChild(row);
+  }
+}
+function updatePills(){
+  document.getElementById('pillPrisoner').classList.toggle('on', settings.prisoner);
+  document.getElementById('pillWall').classList.toggle('on', settings.wall);
+}
+let toastTimer=null;
+function toast(msg){
+  toastEl.textContent=msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove('show'), 2100);
+}
+function showOverlay(o){ o.classList.add('show'); }
+function hideOverlay(o){ o.classList.remove('show'); }
+function showWin(){
+  const p=game.winner, won = controllers[p]==='human';
+  document.getElementById('winEmoji').textContent = won?'🏆':'🎪';
+  document.getElementById('winTitle').textContent = won?'Victory!':`${SEATS[p].label} wins`;
+  document.getElementById('winName').textContent = won
+    ? 'All four of your tokens made it home. Take a bow!'
+    : 'Better luck next round — the carnival never sleeps.';
+  won?sfx.win():sfx.lose();
+  showOverlay(winOverlay);
+}
+
+/* settings wiring */
+const aiSeg=document.getElementById('aiSeg');
+function syncSettingsUI(){
+  [...aiSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.aiCount));
+  document.getElementById('optPrisoner').checked=settings.prisoner;
+  document.getElementById('optWall').checked=settings.wall;
+  document.getElementById('optSound').checked=settings.sound;
+}
+aiSeg.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const n=+b.dataset.n;
+  if(n===settings.aiCount) return;
+  settings.aiCount=n; saveSettings(); syncSettingsUI();
+  newGame(); toast(`New game — you vs ${n} AI`);
+});
+document.getElementById('optPrisoner').addEventListener('change', e=>{
+  settings.prisoner=e.target.checked; saveSettings(); updatePills();
+  if(!settings.prisoner){
+    let freed=0;
+    for(const t of game.tokens) if(t.state==='jail'){ t.state='base'; t.heldBy=-1; freed++; }
+    if(freed) toast('Prisoners returned to their bases');
+    updateRoster();
+  }
+  toast(`Prisoner rule ${settings.prisoner?'ON':'OFF'}`);
+});
+document.getElementById('optWall').addEventListener('change', e=>{
+  settings.wall=e.target.checked; saveSettings(); updatePills();
+  toast(`Wall rule ${settings.wall?'ON':'OFF'}`);
+});
+document.getElementById('optSound').addEventListener('change', e=>{
+  settings.sound=e.target.checked; saveSettings();
+  if(settings.sound) sfx.enter();
+});
+document.getElementById('gearBtn').addEventListener('click', ()=>{ syncSettingsUI(); showOverlay(settingsOverlay); });
+document.getElementById('rulesLink').addEventListener('click', e=>{ e.preventDefault(); syncSettingsUI(); showOverlay(settingsOverlay); });
+document.getElementById('closeSettings').addEventListener('click', ()=>hideOverlay(settingsOverlay));
+settingsOverlay.addEventListener('click', e=>{ if(e.target===settingsOverlay) hideOverlay(settingsOverlay); });
+document.getElementById('newGameBtn').addEventListener('click', ()=>{ hideOverlay(settingsOverlay); newGame(); toast('New game'); });
+document.getElementById('againBtn').addEventListener('click', ()=>newGame());
+rollBtn.addEventListener('click', ()=>{ if(!isAI(curSeat())) doRoll(); });
+dieEl.addEventListener('click', ()=>{ if(!isAI(curSeat())) doRoll(); });
+window.addEventListener('resize', resize);
+
+/* ---------- boot ---------- */
+resize();
+newGame();
+requestAnimationFrame(loop);
+// debug hook (handy in devtools / automated tests)
+window.__ludo = {game, settings, newGame, legalActions, performAction, tokenById, doRoll, SEATS, START, TRACK};
+</script>
+</body>
+</html>
