@@ -75,8 +75,8 @@ color; the renderer reads `TH()` each frame, and page chrome switches via
 - Tokens race clockwise around the 52-square track, then up their colored home column.
 - Landing on a square holding opponent tokens captures them **all** (back to their
   bases — or jail, see Prisoner rule) — entry squares included; deploying from base
-  captures too. Only the four **star** squares are safe, so enemy tokens can only ever
-  share a square on a star (or behind the Wall rule, which blocks landing outright).
+  captures too. There are no safe squares, so different colors can never share a
+  square (an enemy wall under the Wall rule blocks landing outright instead).
 - **Exact roll to finish**: a piece is home when it lands exactly on the last colored
   square of its corridor; a die that would overshoot cannot be used on that piece.
   Finished pieces leave the board (shown in the center triangle). Games can be played
@@ -100,7 +100,7 @@ off. Mixed-color squares (coexisting tokens) are not walls.
 
 Single-pass heuristic over `legalActions` (no search): capture (+40, +12 more with
 Prisoner rule), finish (+42), enter home column (+26), deploy from base (+26), free a
-prisoner (+30), land on safe (+10), flee threatened squares (+9/threat), avoid landing
+prisoner (+30), flee threatened squares (+9/threat), avoid landing
 within dice-reach of opponents (−11/threat, scaled by progress at risk), form walls (+7)
 and avoid breaking them (−3) when the Wall rule is on. Small random jitter breaks ties.
 

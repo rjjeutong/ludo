@@ -348,7 +348,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 9</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 10</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -399,7 +399,6 @@ footer a{color:var(--text-dim)}
     <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner).</p></div>
     <div class="rblock"><b>♻ Play every die</b><p>You must dispatch so that as many dice as possible get played. A choice that strands a die is illegal if another choice plays them all — this outranks even capturing.</p></div>
     <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a square holding opponent pieces captures them <b>all</b> — entry squares included. If a max-dice dispatch can reach a capture, you must take a capturing route; with several options, you choose which. A piece that captures is <b>spent</b> — it rests until your next turn, so your remaining dice go to other pieces.</p></div>
-    <div class="rblock"><b>★ Safe squares</b><p>The four star squares are the only safe cells — nothing can be captured there. Tokens may share any square otherwise.</p></div>
     <div class="rblock"><b>⛓ Prisoner rule <em>(optional)</em></b><p>Captured tokens go to the capturer's jail instead of back home. The owner must spend a rolled 6 to free one back to base — then deploy it later with another 6.</p></div>
     <div class="rblock"><b>🧱 Wall rule <em>(optional)</em></b><p>Two or more of your tokens on one square form a wall. No token may pass over it, and opponents can't land on it — but you can land more of your own pieces there to grow the wall as tall as you like. Move stacked tokens off to break it.</p></div>
     <div class="rblock"><b>🏆 Winning</b><p>Race clockwise around the board, then up your colored home column. A piece finishes by landing on the <b>last colored square by exact count</b> — a die that would overshoot can't be used on that piece. Finished pieces leave the board. First player to bring all tokens home wins.</p></div>
@@ -445,8 +444,7 @@ const TRACK = [];                   // 52 cells, clockwise, index 0 = Crimson's 
   seg(6,5,  0,-1,6);  seg(7,0, 1,0,2);  seg(8,1, 0, 1,5);  seg(9,6, 1,0,6);
   seg(14,7, 0, 1,2);  seg(13,8,-1,0,5); seg(8,9, 0, 1,6);  seg(7,14,-1,0,2);
 })();
-const STARS = new Set([8,21,34,47]);
-const SAFE = STARS;                 // ONLY star squares are capture-free — entries are NOT safe
+const SAFE = new Set();             // no safe squares — every square is capturable
 function homeCell(p,h){              // home-column cells, h = 0..4 (5th step = finished)
   switch(p){
     case 0: return {c:7,    r:13-h};
@@ -637,7 +635,7 @@ function legalActionsFor(toks, p, die){
   return acts;
 }
 // Every opponent token this action would capture (all enemies on the landing
-// square — stars excepted). Deploying from base captures too.
+// square). Deploying from base captures too.
 function actionCaptureVictims(toks, p, act){
   if(act.type==='free') return [];
   let destIdx;
@@ -902,7 +900,6 @@ function aiScore(p, act){
   const dest = last.idx;
   for(const v of actionCaptureVictims(game.tokens, p, act))
     s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);  // jailing hurts more
-  if(SAFE.has(dest)) s += 10;
   if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*9;   // fleeing danger
   const dNew = dangerAt(p, dest);
   s -= dNew*11 + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
@@ -1097,11 +1094,6 @@ function drawTrackCells(){
     }
     ctx.fillStyle=fill; ctx.fill();
     ctx.strokeStyle=stroke; ctx.lineWidth=1; ctx.stroke();
-    if(STARS.has(i)){
-      drawStar(px(t.c), px(t.r), S*0.3);
-      ctx.fillStyle=T.star; ctx.fill();
-      ctx.strokeStyle=T.starStroke; ctx.lineWidth=1; ctx.stroke();
-    }
     if(entrySeat>=0){ // direction chevron
       const d=SEATS[entrySeat].dir, cx=px(t.c), cy=px(t.r);
       ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(d.dy,d.dx));
@@ -1197,15 +1189,6 @@ function drawTokens(now){
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(here.length, x+S*0.3, y-S*0.31);
     }
-  }
-  // sanctuary badge: tokens hide the star icon, so occupied star cells get a
-  // small gold star above the pieces — sharing there is legal, not a bug
-  for(const idx of STARS){
-    if(!tokensAtTrack(game.tokens, idx).filter(t=>!isAnim(t)).length) continue;
-    const t=TRACK[idx];
-    drawStar((t.c+0.2)*S, (t.r+0.22)*S, S*0.15);
-    ctx.fillStyle='#ffd479'; ctx.fill();
-    ctx.strokeStyle='rgba(20,12,0,.55)'; ctx.lineWidth=1; ctx.stroke();
   }
   // jailed tokens (caged, next to capturer's base)
   for(const p of game.order){
