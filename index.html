@@ -348,7 +348,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 9</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -1197,6 +1197,15 @@ function drawTokens(now){
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(here.length, x+S*0.3, y-S*0.31);
     }
+  }
+  // sanctuary badge: tokens hide the star icon, so occupied star cells get a
+  // small gold star above the pieces — sharing there is legal, not a bug
+  for(const idx of STARS){
+    if(!tokensAtTrack(game.tokens, idx).filter(t=>!isAnim(t)).length) continue;
+    const t=TRACK[idx];
+    drawStar((t.c+0.2)*S, (t.r+0.22)*S, S*0.15);
+    ctx.fillStyle='#ffd479'; ctx.fill();
+    ctx.strokeStyle='rgba(20,12,0,.55)'; ctx.lineWidth=1; ctx.stroke();
   }
   // jailed tokens (caged, next to capturer's base)
   for(const p of game.order){

@@ -124,3 +124,5 @@ slot in without rework:
 - Rendering reads state; game logic never touches the canvas. Animations commit logical
   state first, then play, so interrupted animations can't corrupt state.
 - Sounds are synthesized in `sfx` — add new ones there, never audio files.
+- Bump the `build N` stamp in the footer on every push — it's how we confirm which
+  version a player is running (GitHub Pages + browser caching can lag).
