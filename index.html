@@ -302,6 +302,12 @@ footer a{color:var(--text-dim)}
         <div class="lab"><b>Wall rule</b><span>Two+ of your tokens form a wall nobody can pass. Stack more to grow it.</span></div>
         <label class="toggle"><input type="checkbox" id="optWall"><span class="tr"></span><span class="th"></span></label>
       </div>
+      <div class="rulerow">
+        <div class="lab"><b>Pieces per player</b><span>Changing this starts a new game.</span></div>
+        <div class="seg" id="tokSeg">
+          <button data-n="2">2</button><button data-n="4">4</button>
+        </div>
+      </div>
       <button class="btn ghost" id="rulesBtn" style="width:100%;margin-top:11px">📜 How to play</button>
     </div>
   </aside>
@@ -314,17 +320,11 @@ footer a{color:var(--text-dim)}
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <h2>Settings</h2>
-    <p class="sub">Opponents and token count start a new game. The Prisoner and Wall rules are toggled right on the main screen.</p>
+    <p class="sub">Changing opponents starts a new game. Rules and piece count are on the main screen.</p>
     <div class="setting">
       <div class="lab"><b>AI opponents</b><span>You always play Crimson.</span></div>
       <div class="seg" id="aiSeg">
         <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
-      </div>
-    </div>
-    <div class="setting">
-      <div class="lab"><b>Tokens per player</b><span>Shorter games with 2.</span></div>
-      <div class="seg" id="tokSeg">
-        <button data-n="2">2</button><button data-n="4">4</button>
       </div>
     </div>
     <div class="setting">
@@ -1303,6 +1303,7 @@ window.addEventListener('resize', resize);
 /* ---------- boot ---------- */
 document.getElementById('optPrisoner').checked = settings.prisoner;
 document.getElementById('optWall').checked = settings.wall;
+syncSettingsUI();
 resize();
 newGame();
 requestAnimationFrame(loop);
