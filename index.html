@@ -299,7 +299,7 @@ footer a{color:var(--text-dim)}
         <label class="toggle"><input type="checkbox" id="optPrisoner"><span class="tr"></span><span class="th"></span></label>
       </div>
       <div class="rulerow">
-        <div class="lab"><b>Wall rule</b><span>Two of your tokens on a square block everyone — no landing, no passing.</span></div>
+        <div class="lab"><b>Wall rule</b><span>Two+ of your tokens form a wall nobody can pass. Stack more to grow it.</span></div>
         <label class="toggle"><input type="checkbox" id="optWall"><span class="tr"></span><span class="th"></span></label>
       </div>
       <button class="btn ghost" id="rulesBtn" style="width:100%;margin-top:11px">📜 How to play</button>
@@ -347,8 +347,8 @@ footer a{color:var(--text-dim)}
     <div class="rblock"><b>⚔ Captures are mandatory</b><p>Landing on a lone opponent token captures it — entry squares included. If any way of spending your dice reaches a capture, even by chaining dice onto one token, you must take a capturing route. One capture frees the rest of your dice; with several options, you choose which.</p></div>
     <div class="rblock"><b>★ Safe squares</b><p>The four star squares are the only safe cells — nothing can be captured there. Tokens may share any square otherwise.</p></div>
     <div class="rblock"><b>⛓ Prisoner rule <em>(optional)</em></b><p>Captured tokens go to the capturer's jail instead of back home. The owner must spend a rolled 6 to free one back to base — then deploy it later with another 6.</p></div>
-    <div class="rblock"><b>🧱 Wall rule <em>(optional)</em></b><p>Two or more of your tokens on one square form a wall. No token — not even your own — may land on it or pass over it. Move a stacked token off to break it.</p></div>
-    <div class="rblock"><b>🏆 Winning</b><p>Race clockwise around the board, then up your colored home column. Overshooting the finish still counts. First player to bring all tokens home wins.</p></div>
+    <div class="rblock"><b>🧱 Wall rule <em>(optional)</em></b><p>Two or more of your tokens on one square form a wall. No token may pass over it, and opponents can't land on it — but you can land more of your own pieces there to grow the wall as tall as you like. Move stacked tokens off to break it.</p></div>
+    <div class="rblock"><b>🏆 Winning</b><p>Race clockwise around the board, then up your colored home column. A piece finishes by landing on the <b>last colored square by exact count</b> — a die that would overshoot can't be used on that piece. Finished pieces leave the board. First player to bring all tokens home wins.</p></div>
     <div class="actions"><button class="btn" id="closeRules">Got it</button></div>
   </div>
 </div>
@@ -466,15 +466,19 @@ function tokensAtTrack(toks, idx, except){
 function tokensAtHome(toks, p, h, except){
   return toks.filter(t=>t!==except && t.state==='home' && t.seat===p && t.homeIdx===h);
 }
-function isWallCell(toks, cell, except){   // ≥2 same-color tokens ⇒ wall (wall rule only)
+function isWallCell(toks, cell, except, ignoreSeat){ // ≥2 same-color tokens ⇒ wall (wall rule only)
   const list = cell.kind==='track' ? tokensAtTrack(toks, cell.idx, except)
                                    : tokensAtHome(toks, cell.p, cell.h, except);
   const byCol={};
-  for(const t of list){ byCol[t.seat]=(byCol[t.seat]||0)+1; if(byCol[t.seat]>=2) return true; }
+  for(const t of list){
+    if(t.seat===ignoreSeat) continue;
+    byCol[t.seat]=(byCol[t.seat]||0)+1; if(byCol[t.seat]>=2) return true;
+  }
   return false;
 }
-// Path of cells a token steps through for `roll`. Last cell is the destination
-// ({kind:'done'} when the token finishes — overshoot allowed). null = illegal.
+// Path of cells a token steps through for `roll`. Last cell is the destination.
+// Finishing requires landing EXACTLY on the last home cell (h=4 → {kind:'done'});
+// a roll that would overshoot it makes the whole move illegal → null.
 function pathFor(toks, tok, roll){
   const p = tok.seat, cells = [];
   if(tok.state==='track'){
@@ -482,16 +486,29 @@ function pathFor(toks, tok, roll){
     for(let s=1;s<=roll;s++){
       const r = rel+s;
       if(r<=50) cells.push({kind:'track', idx:absOf(p,r)});
-      else { const h=r-51; if(h<=4) cells.push({kind:'home', p, h}); else {cells.push({kind:'done'}); break;} }
+      else {
+        const h=r-51;
+        if(h<4) cells.push({kind:'home', p, h});
+        else if(h===4 && s===roll) cells.push({kind:'done'});
+        else return null;                    // overshoots the finish square
+      }
     }
   } else if(tok.state==='home'){
     for(let s=1;s<=roll;s++){
       const h = tok.homeIdx+s;
-      if(h<=4) cells.push({kind:'home', p, h}); else {cells.push({kind:'done'}); break;}
+      if(h<4) cells.push({kind:'home', p, h});
+      else if(h===4 && s===roll) cells.push({kind:'done'});
+      else return null;                      // overshoots the finish square
     }
   } else return null;
   if(settings.wall){
-    for(const c of cells) if(c.kind!=='done' && isWallCell(toks, c, tok)) return null;
+    // no one passes over any wall; only the owner may LAND on their own wall (to grow it)
+    for(let i=0;i<cells.length;i++){
+      const c=cells[i];
+      if(c.kind==='done') continue;
+      const landing = i===cells.length-1;
+      if(isWallCell(toks, c, tok, landing ? tok.seat : undefined)) return null;
+    }
   }
   return cells;
 }
@@ -503,8 +520,8 @@ function legalActionsFor(toks, p, die){
     if(tok.seat!==p) continue;
     if(tok.state==='base'){
       if(die===6){
-        const entry={kind:'track', idx:START[p]};
-        if(!(settings.wall && isWallCell(toks, entry, tok))) acts.push({type:'enter', t:tok.id});
+        const entry={kind:'track', idx:START[p]};   // deploying = landing: own wall is fine
+        if(!(settings.wall && isWallCell(toks, entry, tok, p))) acts.push({type:'enter', t:tok.id});
       }
     } else if(tok.state==='jail'){
       if(die===6 && settings.prisoner) acts.push({type:'free', t:tok.id});

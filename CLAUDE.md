@@ -34,8 +34,9 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 15×15 grid. `TRACK[0]` = Crimson's entry at cell (6,13); indices increase **clockwise**.
 Entry offsets per seat: `START = [0, 13, 26, 39]`. A token's relative position is
 `rel = (trackIdx - START[seat] + 52) % 52`, range 0–50; `rel+roll ≥ 51` turns into the
-home column (`homeIdx 0–4`), and the 6th home step finishes the token (**overshoot is
-allowed** — no exact-roll requirement). Safe cells (absolute): ONLY the four stars
+home column. Cells `homeIdx 0–3` are waypoints; the 5th colored cell (h=4) is the
+**finish square** — a piece must land on it by **exact count** (overshooting dice are
+illegal for that piece) and is then out of play. Safe cells (absolute): ONLY the four stars
 `{8,21,34,47}` — entry squares are normal cells, so deploying from base can capture an
 enemy camped on your entry.
 
@@ -61,8 +62,10 @@ Seats (fixed): 0 Crimson = human, bottom-left · 1 Emerald, top-left · 2 Amber,
   Prisoner rule) — entry squares included; deploying from base captures too. Only the
   four **star** squares are safe. Landing on a square with 2+ opponent tokens captures
   nothing (tokens coexist).
-- No exact roll needed to finish. Games can be played with **2 or 4 tokens** per player
-  (settings). First player with all tokens home wins; game ends.
+- **Exact roll to finish**: a piece is home when it lands exactly on the last colored
+  square of its corridor; a die that would overshoot cannot be used on that piece.
+  Finished pieces leave the board (shown in the center triangle). Games can be played
+  with **2 or 4 tokens** per player (settings). First player with all tokens home wins.
 
 ### Custom rule 1 — Prisoner (toggle, default off)
 A captured token does **not** return to its owner's base — it is held caged beside the
@@ -72,10 +75,11 @@ On any 6 the player chooses ONE: move a token 6, deploy from base, or free a pri
 Toggling the rule off mid-game releases all prisoners to their owners' bases.
 
 ### Custom rule 2 — Wall (toggle, default off)
-Two or more same-color tokens on one square form a wall. **No token — opponents' or your
-own — may pass over or land on a wall square** (so a 3-stack can't be formed while the
-rule is on). Walls break only when the owner moves a stacked token off. Mixed-color
-squares (coexisting tokens) are not walls.
+Two or more same-color tokens on one square form a wall. **No token may pass over a
+wall, and opponents may not land on it** — but the owner CAN land more of their own
+tokens there to grow the stack (walls of any height). Deploying from base onto your own
+wall at the entry square is allowed. Walls break when the owner moves stacked tokens
+off. Mixed-color squares (coexisting tokens) are not walls.
 
 ## AI
 
