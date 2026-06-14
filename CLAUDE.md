@@ -20,8 +20,8 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 | Constants & geometry | `TRACK` (52 cells, built from segments), `START` offsets, `SAFE`/`STARS` sets, `homeCell()`, base slot coords |
 | Settings | persisted to `localStorage` (`ludo-settings`) |
 | Game state | `game{order, turn, tokens, dice, selDie, phase, allowed, mustCapture, gen, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
-| Rules engine | `pathFor()`, `legalActionsFor()`, `isWallCell()`, `resolveLanding()` — explicit-state (first arg is a tokens array) so they run on clones for simulation |
-| Forced-capture search | `captureReachable()` DFS over dice-dispatch sequences on cloned state; `computeAllowed()` filters `{die, act}` pairs that would forfeit a reachable capture |
+| Rules engine | `pathFor()`, `legalActionsFor()`, `isWallCell()`, `finalCaptures()`, `applySim()` — explicit-state (first arg is a tokens array) so they run on clones for simulation |
+| Dispatch search | `bestOutcome()` DFS over dice-dispatch sequences on cloned state, returning lexicographic `(dicePlayed, finalCaptureFlag)`; `computeAllowed()` keeps only `{die, act}` first moves that still reach that best. Real captures are applied at end of turn by `resolveTurnCaptures()` |
 | Turn engine | `idle → rolling (repeat while 6s) → dispatch (one die at a time) → animating → next turn`; all timers go through `later()`, which no-ops if `game.gen` changed (so New Game can't be corrupted by stale callbacks) |
 | AI | heuristic scorer over allowed pairs (`aiScore`) |
 | Sound | Web Audio oscillator synth (`tone()` + `sfx` presets), no audio files |
@@ -61,22 +61,31 @@ color; the renderer reads `TH()` each frame, and page chrome switches via
 - **Play every die**: the dispatch must play as many dice as possible. A choice that
   strands a die is illegal if another choice plays more — this obligation outranks the
   capture obligation.
-- **Captures are mandatory** (within max-dice routes): if a dispatch that plays the
-  maximum number of dice can reach a capture, the player must take a capturing route;
-  with several capture options the player picks freely. Capturing once lifts the
-  obligation for the rest of the turn.
-- **Capture-freeze**: a piece that captures (including by deploying onto an enemy at
-  its entry) is spent — it cannot move again until its owner's next turn. Remaining
-  dice must go to other pieces.
-  Both obligations are enforced by `bestOutcome()` — a DFS that returns the
-  lexicographic max `(dicePlayed, capturedFlag)` over all dispatch sequences;
-  `computeAllowed()` keeps only first moves that still achieve it. The UI dims
-  forbidden/frozen pieces and explains on tap (`blockReasons`: 'waste'/'capture').
+- **Captures are mandatory** (within max-dice routes): among the dispatches that play
+  the maximum number of dice, if any leaves one of your pieces **resting** on an enemy,
+  you must take such a route; with several capturing routes the player picks freely.
+  But capturing never costs you a playable die — if the only way to play all your dice
+  carries the piece off the enemy (reordering, overshooting, or carrying on after a
+  deploy), you do that and no capture happens.
+- **Capture is judged on the final resting board, not on intermediate landings.**
+  Passing over (or briefly touching, then carrying on past) an enemy never captures —
+  a piece captures only the enemies sitting on the square where it *comes to rest* at
+  the end of the dispatch (`finalCaptures()`). This is what makes the deploy case work:
+  rolling 6-5 with only an enemy on your entry deploys (6) and carries the same piece on
+  5 — it doesn't rest on the entry, so it doesn't capture, and both dice are played.
+  Both obligations are enforced by `bestOutcome()` — a DFS that returns the lexicographic
+  max `(dicePlayed, finalCaptureFlag)` over all dispatch sequences (capture flag computed
+  only at the leaves, on resting positions); `computeAllowed()` keeps only first moves
+  that still achieve it. The UI dims forbidden pieces and explains on tap (`blockReasons`:
+  'waste'/'capture'). Captures are applied for real once, at end of turn, in
+  `resolveTurnCaptures()` (called from `endTurn()`). There is no per-turn "freeze" flag:
+  a piece that ends the turn on an enemy is inherently done moving.
 - Tokens race clockwise around the 52-square track, then up their colored home column.
-- Landing on a square holding opponent tokens captures them **all** (back to their
+- Coming to rest on a square holding opponent tokens captures them **all** (back to their
   bases — or jail, see Prisoner rule) — entry squares included; deploying from base
-  captures too. There are no safe squares, so different colors can never share a
-  square (an enemy wall under the Wall rule blocks landing outright instead).
+  captures too (when the deployed piece stays there). There are no safe squares; a piece
+  may pass through an enemy square mid-dispatch, but two colors never *rest* together (an
+  enemy wall under the Wall rule blocks landing/passing outright instead).
 - **Exact roll to finish**: a piece is home when it lands exactly on the last colored
   square of its corridor; a die that would overshoot cannot be used on that piece.
   Finished pieces leave the board (shown in the center triangle). Games can be played
@@ -89,7 +98,7 @@ prisoner (token returns to owner's base); a later 6 brings it onto the track as 
 On any 6 the player chooses ONE: move a token 6, deploy from base, or free a prisoner.
 Toggling the rule off mid-game releases all prisoners to their owners' bases.
 
-### Custom rule 2 — Wall (toggle, default off)
+### Custom rule 2 — Wall (toggle, default on)
 Two or more same-color tokens on one square form a wall. **No token may pass over a
 wall, and opponents may not land on it** — but the owner CAN land more of their own
 tokens there to grow the stack (walls of any height). Deploying from base onto your own
