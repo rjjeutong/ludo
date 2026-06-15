@@ -323,6 +323,7 @@ footer a{color:var(--text-dim)}
         </div>
       </div>
       <div class="dice-queue" id="diceQueue"></div>
+      <button class="btn ghost" id="undoBtn" style="display:none;width:100%;margin-top:9px">↶ Undo last move</button>
     </div>
     <div class="card">
       <div class="roster" id="roster"></div>
@@ -348,7 +349,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 12</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 13</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -360,6 +361,12 @@ footer a{color:var(--text-dim)}
       <div class="lab"><b>AI opponents</b><span>Starts a new game.</span></div>
       <div class="seg" id="aiSeg">
         <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+      </div>
+    </div>
+    <div class="setting">
+      <div class="lab"><b>Difficulty</b><span>How sharply the AI plays. Applies right away.</span></div>
+      <div class="seg" id="diffSeg">
+        <button data-d="easy">Easy</button><button data-d="medium">Medium</button><button data-d="hard">Hard</button>
       </div>
     </div>
     <div class="setting">
@@ -396,7 +403,7 @@ footer a{color:var(--text-dim)}
   <div class="modal">
     <h2>How to play</h2>
     <p class="sub">Night Carnival house rules.</p>
-    <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner).</p></div>
+    <div class="rblock"><b>🎲 The turn</b><p>Roll the die. A 6 means roll again — keep rolling until a non-6 lands. All your rolls form a dice queue; then spend them, one move per die, in any order, on any tokens. A 6 can instead deploy a token from base (or free a prisoner). If a piece could move by more than one of your dice, tap the die you want first; tap <b>Undo</b> to take back a move while you still have dice to play.</p></div>
     <div class="rblock"><b>♻ Play every die</b><p>You must dispatch so that as many dice as possible get played. A choice that strands a die is illegal if another choice plays them all — this outranks even capturing.</p></div>
     <div class="rblock"><b>⚔ Captures are mandatory</b><p><b>Resting</b> on a square holding opponent pieces captures them <b>all</b> — entry squares included. If a max-dice dispatch can finish with a capture, you must take a capturing route; with several options, you choose which. But capturing never costs you a die: if the only way to play every die carries your piece <b>past</b> the enemy (passing over never captures), you play on and no capture happens.</p></div>
     <div class="rblock"><b>⛓ Prisoner rule <em>(optional)</em></b><p>Captured tokens go to the capturer's jail instead of back home. The owner must spend a rolled 6 to free one back to base — then deploy it later with another 6.</p></div>
@@ -505,7 +512,7 @@ function applyTheme(){ document.body.dataset.theme = settings.theme in THEMES ? 
 
 /* ---------- settings (persisted) ---------- */
 const settings = Object.assign(
-  {aiCount:3, tokenCount:4, prisoner:false, wall:true, sound:true, theme:'carnival', humanSeat:0},
+  {aiCount:3, tokenCount:4, prisoner:false, wall:true, sound:true, theme:'carnival', humanSeat:0, difficulty:'medium'},
   JSON.parse(localStorage.getItem('ludo-settings')||'{}')
 );
 const saveSettings = ()=>localStorage.setItem('ludo-settings', JSON.stringify(settings));
@@ -519,6 +526,8 @@ const game = {
   dice:[],           // pending dice for this turn (roll-all-first)
   lastRoll:null,
   selDie:null,       // die value the human has selected to spend
+  dieChosen:false,   // true once the human explicitly taps a die this dispatch step
+  undoStack:[],      // pre-move snapshots for this turn (human can take moves back)
   phase:'idle',      // idle (may roll) | rolling | dispatch | animating | over
   allowed:[],        // allowed {die, act} pairs (forced-capture filtered)
   blockedIds:new Set(), // tokens legal-but-forbidden by the capture obligation
@@ -548,6 +557,7 @@ function newGame(){
     for(let s=0;s<settings.tokenCount;s++)
       game.tokens.push({id:`${p}-${s}`, seat:p, slot:s, state:'base', trackIdx:-1, homeIdx:-1, heldBy:-1});
   game.turn=0; game.dice=[]; game.lastRoll=null; game.selDie=null;
+  game.dieChosen=false; game.undoStack=[];
   game.phase='idle'; game.allowed=[]; game.blockedIds=new Set();
   game.mustCapture=false; game.winner=null;
   game.gen++;
@@ -736,11 +746,12 @@ const pairCaptures = pr => !!pr.cap;        // capture judged on the final resti
 /* ---------- turn engine ---------- */
 function startTurn(){
   game.dice=[]; game.lastRoll=null; game.selDie=null;
+  game.dieChosen=false; game.undoStack=[];
   game.allowed=[]; game.blockedIds=new Set();
   game.mustCapture=false;
   game.phase='idle';
-  updateRoster(); updateBanner(); updateDie(); updateDiceQueue();
-  if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 800);
+  updateRoster(); updateBanner(); updateDie(); updateDiceQueue(); updateUndoBtn();
+  if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
 }
 function doRoll(){
   if(game.phase!=='idle') return;
@@ -761,7 +772,7 @@ function doRoll(){
       sfx.six();
       game.phase='idle';                       // a 6 means: roll again before moving
       updateDie(); updateBanner();
-      if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 700);
+      if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
       else toast('A 6! Roll again — you move after the rolling stops');
     } else {
       beginDispatch();
@@ -775,6 +786,7 @@ function beginDispatch(){
   updateDiceQueue(); updateBanner(); updateDie(); updateRoster();
   if(game.allowed.length===0){
     game.phase='animating';
+    updateUndoBtn();
     if(game.dice.length) { toast(`${seatName(p)} — no moves left`); sfx.noMove(); }
     later(endTurn, 900);
     return;
@@ -782,15 +794,19 @@ function beginDispatch(){
   // default die selection: first pending die that still has an allowed pair
   if(game.selDie==null || !game.allowed.some(pr=>pr.die===game.selDie))
     game.selDie = game.dice.find(d=>game.allowed.some(pr=>pr.die===d)) ?? null;
-  updateDiceQueue();
-  if(isAI(p)) later(()=>{ if(game.phase==='dispatch') performPair(aiPick(p, game.allowed)); }, 560);
+  game.dieChosen = false;                  // fresh step: a multi-die piece must be told which die
+  updateDiceQueue(); updateUndoBtn();
+  if(isAI(p)) later(()=>{ if(game.phase==='dispatch') performPair(aiPick(p, game.allowed)); }, 250);
   else if(game.mustCapture) toast('⚔ Capture is mandatory — capturing routes stay lit');
 }
 function performPair(pr){
   if(game.phase!=='dispatch' || !pr) return;
+  if(!isAI(curSeat()))                      // let the human take this move back (deferred capture = clean rollback)
+    game.undoStack.push({tokens:cloneToks(game.tokens), dice:[...game.dice], selDie:game.selDie});
   game.phase='animating';
   game.dice.splice(game.dice.indexOf(pr.die), 1);
   game.allowed=[]; game.blockedIds=new Set();
+  updateUndoBtn();
   updateDiceQueue();
   const act = pr.act, tok = tokenById(act.t), p = tok.seat;
   if(act.type==='enter'){
@@ -868,8 +884,33 @@ function endTurn(){
   const advance = ()=>{ game.turn = (game.turn+1) % game.order.length; startTurn(); };
   if(captured) later(advance, 750); else advance();
 }
+// Take back the human's last die this turn — restore the pre-move board and dice.
+// Safe because captures aren't committed until the turn ends.
+function undoMove(){
+  if(isAI(curSeat()) || game.phase!=='dispatch' || !game.undoStack.length) return;
+  const snap = game.undoStack.pop();
+  game.tokens = snap.tokens;            // already a clone taken before the move
+  game.dice = snap.dice;
+  game.selDie = snap.selDie;
+  game.dieChosen = false;
+  computeAllowed();
+  updateDiceQueue(); updateBanner(); updateDie(); updateRoster(); updateUndoBtn();
+  sfx.step();
+}
+function updateUndoBtn(){
+  const show = !isAI(curSeat()) && game.phase==='dispatch' && game.undoStack.length>0;
+  undoBtn.style.display = show ? '' : 'none';
+}
 
 /* ---------- AI (heuristic scoring over allowed pairs) ---------- */
+// Difficulty tunes only how *well* the AI plays — never the dice (which stay a
+// fair 1–6 for everyone). Easy blunders often and ignores danger; Hard is sharp.
+const AI_PROFILES = {
+  easy:   { jitter:18, blunder:0.32, capture:14, flee:1,  avoid:2,  wall:2 },
+  medium: { jitter:2,  blunder:0,    capture:40, flee:9,  avoid:11, wall:7 },
+  hard:   { jitter:0.5,blunder:0,    capture:48, flee:12, avoid:14, wall:9 },
+};
+const aiProfile = ()=> AI_PROFILES[settings.difficulty] || AI_PROFILES.medium;
 function dangerAt(p, absIdx){
   if(SAFE.has(absIdx)) return 0;
   let d=0;
@@ -881,6 +922,9 @@ function dangerAt(p, absIdx){
   return d;
 }
 function aiPick(p, pairs){
+  const A = aiProfile();
+  if(A.blunder && Math.random()<A.blunder)           // easy: sometimes just pick a legal move at random
+    return pairs[Math.floor(Math.random()*pairs.length)];
   let best=null, bestScore=-1e9;
   for(const pr of pairs){
     const s = aiScore(p, pr.act, pr.cap);          // pr.cap: does this route still land a capture?
@@ -889,12 +933,13 @@ function aiPick(p, pairs){
   return best;
 }
 function aiScore(p, act, willCapture){
-  const jitter = Math.random()*2;
+  const A = aiProfile();
+  const jitter = Math.random()*A.jitter;
   if(act.type==='free')  return 30 + jitter + (tokensOf(p).filter(t=>t.state==='jail').length>1?6:0);
   if(act.type==='enter'){
     let s = 26 + jitter;
     if(willCapture) for(const v of actionCaptureVictims(game.tokens, p, act))
-      s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);
+      s += A.capture + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);
     return s;
   }
   const tok = tokenById(act.t);
@@ -905,14 +950,14 @@ function aiScore(p, act, willCapture){
   if(last.kind==='home') return s + (tok.state==='track'?26:10) + last.h;
   const dest = last.idx;
   if(willCapture) for(const v of actionCaptureVictims(game.tokens, p, act))
-    s += 40 + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);  // jailing hurts more
-  if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*9;   // fleeing danger
+    s += A.capture + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);  // jailing hurts more
+  if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*A.flee;   // fleeing danger
   const dNew = dangerAt(p, dest);
-  s -= dNew*11 + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
+  s -= dNew*A.avoid + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
   if(settings.wall){
     const own = tokensAtTrack(game.tokens, dest, tok).filter(t=>t.seat===p);
-    if(own.length===1) s += 7;                       // forming a wall
-    if(tok.state==='track' && tokensAtTrack(game.tokens, tok.trackIdx, tok).some(t=>t.seat===p)) s -= 3; // breaking one
+    if(own.length===1) s += A.wall;                  // forming a wall
+    if(tok.state==='track' && tokensAtTrack(game.tokens, tok.trackIdx, tok).some(t=>t.seat===p)) s -= A.wall*0.43; // breaking one
   }
   return s;
 }
@@ -1249,13 +1294,16 @@ function loop(now){ draw(now); requestAnimationFrame(loop); }
 
 /* ---------- input ---------- */
 function pairForToken(tokId){
-  // prefer the selected die; fall back if the token is only spendable with another die
   const ofTok = game.allowed.filter(pr=>pr.act.t===tokId);
   if(!ofTok.length) return null;
-  const sel = ofTok.find(pr=>pr.die===game.selDie);
-  if(sel) return sel;
   const dies = new Set(ofTok.map(pr=>pr.die));
-  if(dies.size===1) return ofTok[0];
+  if(dies.size===1) return ofTok[0];          // only one possible count — just play it
+  // this piece could move by more than one die: never guess. Require an explicit
+  // die pick first (so a stray tap can't spend the wrong count and trap you).
+  if(game.dieChosen){
+    const sel = ofTok.find(pr=>pr.die===game.selDie);
+    if(sel) return sel;
+  }
   return 'ambiguous';
 }
 canvas.addEventListener('pointerdown', e=>{
@@ -1279,7 +1327,7 @@ canvas.addEventListener('pointerdown', e=>{
     return;
   }
   const pr = pairForToken(hitId);
-  if(pr==='ambiguous'){ toast('Tap a die first, then the token'); return; }
+  if(pr==='ambiguous'){ toast('🎲 This piece can take either die — tap the die you want first'); sfx.noMove(); return; }
   if(pr) performPair(pr);
 });
 canvas.addEventListener('pointermove', e=>{
@@ -1331,7 +1379,7 @@ function updateDiceQueue(){
     if(game.phase==='dispatch' && d===game.selDie &&
        i===game.dice.indexOf(d)) chip.classList.add('sel');
     if(human && game.phase==='dispatch' && usable){
-      chip.addEventListener('click', ()=>{ game.selDie=d; updateDiceQueue(); updateBanner(); });
+      chip.addEventListener('click', ()=>{ game.selDie=d; game.dieChosen=true; updateDiceQueue(); updateBanner(); });
     }
     diceQueueEl.appendChild(chip);
   });
@@ -1395,11 +1443,14 @@ const aiSeg=document.getElementById('aiSeg');
 const tokSeg=document.getElementById('tokSeg');
 const seatSeg=document.getElementById('seatSeg');
 const themeSeg=document.getElementById('themeSeg');
+const diffSeg=document.getElementById('diffSeg');
+const undoBtn=document.getElementById('undoBtn');
 function syncSettingsUI(){
   [...aiSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.aiCount));
   [...tokSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.n===settings.tokenCount));
   [...seatSeg.children].forEach(b=>b.classList.toggle('sel', +b.dataset.s===settings.humanSeat));
   [...themeSeg.children].forEach(b=>b.classList.toggle('sel', b.dataset.t===settings.theme));
+  [...diffSeg.children].forEach(b=>b.classList.toggle('sel', b.dataset.d===settings.difficulty));
   document.getElementById('optSound').checked=settings.sound;
 }
 seatSeg.addEventListener('click', e=>{
@@ -1429,6 +1480,13 @@ tokSeg.addEventListener('click', e=>{
   settings.tokenCount=n; saveSettings(); syncSettingsUI();
   newGame(); toast(`New game — ${n} tokens each`);
 });
+diffSeg.addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.d===settings.difficulty) return;
+  settings.difficulty=b.dataset.d; saveSettings(); syncSettingsUI();   // applies immediately, no new game
+  toast(`Difficulty: ${b.dataset.d}`);
+});
+undoBtn.addEventListener('click', undoMove);
 document.getElementById('optPrisoner').addEventListener('change', e=>{
   settings.prisoner=e.target.checked; saveSettings();
   if(!settings.prisoner){
@@ -1472,7 +1530,7 @@ requestAnimationFrame(loop);
 // debug hook (handy in devtools / automated tests)
 window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
   bestOutcome, cloneToks, actionCaptureVictims, tokenById, doRoll, beginDispatch,
-  THEMES, SEATS, START, TRACK};
+  undoMove, aiPick, AI_PROFILES, THEMES, SEATS, START, TRACK};
 </script>
 </body>
 </html>

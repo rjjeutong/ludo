@@ -19,11 +19,11 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 | Markup | header/banner, canvas, side panel (die + roster + rule pills), settings & win modals |
 | Constants & geometry | `TRACK` (52 cells, built from segments), `START` offsets, `SAFE`/`STARS` sets, `homeCell()`, base slot coords |
 | Settings | persisted to `localStorage` (`ludo-settings`) |
-| Game state | `game{order, turn, tokens, dice, selDie, phase, allowed, mustCapture, gen, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
+| Game state | `game{order, turn, tokens, dice, selDie, dieChosen, undoStack, phase, allowed, mustCapture, gen, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
 | Rules engine | `pathFor()`, `legalActionsFor()`, `isWallCell()`, `finalCaptures()`, `applySim()` — explicit-state (first arg is a tokens array) so they run on clones for simulation |
 | Dispatch search | `bestOutcome()` DFS over dice-dispatch sequences on cloned state, returning lexicographic `(dicePlayed, finalCaptureFlag)`; `computeAllowed()` keeps only `{die, act}` first moves that still reach that best. Real captures are applied at end of turn by `resolveTurnCaptures()` |
 | Turn engine | `idle → rolling (repeat while 6s) → dispatch (one die at a time) → animating → next turn`; all timers go through `later()`, which no-ops if `game.gen` changed (so New Game can't be corrupted by stale callbacks) |
-| AI | heuristic scorer over allowed pairs (`aiScore`) |
+| AI | heuristic scorer over allowed pairs (`aiScore`/`aiPick`), tuned per `settings.difficulty` via `AI_PROFILES` (easy/medium/hard) |
 | Sound | Web Audio oscillator synth (`tone()` + `sfx` presets), no audio files |
 | Rendering | `draw()` on a continuous rAF loop; token slide animation steps cell-by-cell |
 | Input | canvas pointer hit-testing against actionable tokens |
@@ -58,6 +58,12 @@ color; the renderer reads `TH()` each frame, and page chrome switches via
   (e.g. 6, 6, 3). Only then does the player dispatch them — one move per die, any order,
   any tokens. A 6 die can be spent to deploy from base (or free a prisoner). No
   three-sixes penalty. Unusable dice are forfeited; the turn ends when no die can be spent.
+  **Die choice & undo (UI):** if a tapped piece could move by more than one pending die,
+  the input layer refuses to guess — the player must tap the die chip first (gated by
+  `game.dieChosen`, reset each dispatch step). `undoMove()` pops `game.undoStack` (a
+  pre-move clone pushed in `performPair` for human moves) to take a move back while dice
+  remain; the stack clears at `startTurn`. Safe because captures aren't committed until
+  end of turn.
 - **Play every die**: the dispatch must play as many dice as possible. A choice that
   strands a die is illegal if another choice plays more — this obligation outranks the
   capture obligation.
@@ -107,11 +113,16 @@ off. Mixed-color squares (coexisting tokens) are not walls.
 
 ## AI
 
-Single-pass heuristic over `legalActions` (no search): capture (+40, +12 more with
-Prisoner rule), finish (+42), enter home column (+26), deploy from base (+26), free a
-prisoner (+30), flee threatened squares (+9/threat), avoid landing
-within dice-reach of opponents (−11/threat, scaled by progress at risk), form walls (+7)
-and avoid breaking them (−3) when the Wall rule is on. Small random jitter breaks ties.
+Single-pass heuristic over `legalActions` (no search): capture, finish (+42), enter home
+column (+26), deploy from base (+26), free a prisoner (+30), flee threatened squares,
+avoid landing within dice-reach of opponents (scaled by progress at risk), form walls and
+avoid breaking them when the Wall rule is on. Random jitter breaks ties.
+
+**Difficulty** (`settings.difficulty`, default `medium`) only tunes how *well* the AI
+plays — never the dice, which are a fair `1 + floor(random*6)` for every seat. `AI_PROFILES`
+scales the capture/flee/avoid/wall weights and the jitter; `easy` also has a `blunder`
+chance to pick a random *legal* move outright. `aiProfile()` reads the active profile each
+decision. AI pacing is snappy: ~450 ms before rolling, ~250 ms before each move.
 
 ## Modes roadmap
 
