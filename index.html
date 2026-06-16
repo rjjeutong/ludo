@@ -222,6 +222,23 @@ canvas{display:block;border-radius:14px;cursor:default;touch-action:manipulation
   font-family:var(--font-display);font-weight:800;font-size:12px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--gold);margin:0 0 6px;
 }
+/* online table chat */
+.chat-msgs{
+  height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;
+  padding:8px;border-radius:12px;background:var(--ink);border:1px solid var(--panel-edge);
+  font-size:13px;line-height:1.3;
+}
+.chat-msgs .cmsg{word-break:break-word}
+.chat-msgs .cmsg.me{align-self:flex-end;text-align:right}
+.chat-msgs .cmsg b{font-weight:700}
+.chat-msgs .cempty{color:var(--text-faint);font-size:12px;text-align:center;margin:auto}
+.chat-row{display:flex;gap:6px;margin-top:8px}
+.chat-row input{
+  flex:1;min-width:0;padding:9px 11px;border-radius:11px;font:inherit;font-size:13px;
+  background:rgba(255,255,255,.06);border:1px solid var(--panel-edge);color:var(--text);
+}
+.chat-row input:focus{outline:none;border-color:var(--gold)}
+.chat-row .btn{padding:9px 14px}
 .rulerow{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:9px 0;border-top:1px solid rgba(255,255,255,.06);
@@ -332,6 +349,14 @@ footer a{color:var(--text-dim)}
     <div class="card">
       <div class="roster" id="roster"></div>
     </div>
+    <div class="card" id="chatCard" style="display:none">
+      <div class="card-title">Table chat</div>
+      <div class="chat-msgs" id="chatMsgs"></div>
+      <div class="chat-row">
+        <input id="chatIn" placeholder="Message…" maxlength="200" autocomplete="off">
+        <button class="btn" id="chatSend">Send</button>
+      </div>
+    </div>
     <div class="card">
       <div class="card-title">House Rules</div>
       <div class="rulerow">
@@ -353,7 +378,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 14</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 15</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -1832,7 +1857,30 @@ function onlineEnded(text){
   toast(text);
   updateBanner(); updateDie(); updateUndoBtn();
 }
-function attachChat(){ /* chat hook reserved for a later pass */ }
+function attachChat(){
+  document.getElementById('chatCard').style.display='';
+  if(chatListener) return;                 // one feed per room — survives rematches
+  chatRef=roomRef.child('messages');
+  document.getElementById('chatMsgs').innerHTML='<div class="cempty">Say hi 👋</div>';
+  chatListener=chatRef.on('child_added', snap=>{ const m=snap.val(); if(m) appendChatMsg(m.seat, m.text); });
+}
+function sendChatMsg(){
+  const inp=document.getElementById('chatIn');
+  const text=(inp.value||'').trim(); if(!text || !chatRef) return;
+  inp.value='';
+  chatRef.push({ seat:mySeat, text:text.slice(0,200), ts:Date.now() });
+}
+function appendChatMsg(seat, text){
+  const box=document.getElementById('chatMsgs');
+  const empty=box.querySelector('.cempty'); if(empty) empty.remove();
+  const div=document.createElement('div');
+  div.className='cmsg'+(seat===mySeat?' me':'');
+  const who=document.createElement('b'); who.style.color=SEATS[seat].main;
+  who.textContent=(seat===mySeat?'You':SEATS[seat].label)+': ';
+  div.appendChild(who);
+  div.appendChild(document.createTextNode(text));   // text node = no HTML injection
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+}
 function closeOnlineOverlay(){ hideOverlay(onlineOverlay); }
 function leaveOnline(){
   if(roomRef){ roomRef.update({status:'abandoned'}); }
@@ -1845,6 +1893,8 @@ function cleanupOnline(){
   if(roomRef) try{ roomRef.onDisconnect().cancel(); }catch(e){}
   eventsRef=roomRef=chatRef=null; eventsListener=roomListener=chatListener=null;
   roomData=null; gameIdOnline=0; remoteQueue=[]; roomCode=null;
+  document.getElementById('chatCard').style.display='none';
+  document.getElementById('chatMsgs').innerHTML='';
 }
 
 /* ---- online overlay wiring ---- */
@@ -1863,6 +1913,8 @@ document.getElementById('olLeaveBtn').addEventListener('click', leaveOnline);
 document.getElementById('olStartBtn').addEventListener('click', hostStart);
 document.getElementById('olMsgBtn').addEventListener('click', ()=>olScreen('pick'));
 onlineOverlay.addEventListener('click', e=>{ if(e.target===onlineOverlay && !online) closeOnlineOverlay(); });
+document.getElementById('chatSend').addEventListener('click', sendChatMsg);
+document.getElementById('chatIn').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendChatMsg(); } });
 
 /* ---------- boot ---------- */
 document.getElementById('optPrisoner').checked = settings.prisoner;
@@ -1876,7 +1928,7 @@ requestAnimationFrame(loop);
 window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
   bestOutcome, cloneToks, actionCaptureVictims, tokenById, doRoll, beginDispatch,
   undoMove, aiPick, AI_PROFILES, THEMES, SEATS, START, TRACK,
-  openOnline, createRoom, joinRoom, hostStart, leaveOnline, requestRematch, olCfg,
+  openOnline, createRoom, joinRoom, hostStart, leaveOnline, requestRematch, sendChatMsg, olCfg,
   net:()=>({online, isHost, mySeat, roomCode, gameIdOnline, phase:game.phase, turn:curSeat(),
     controllers:[...controllers], queue:remoteQueue.length,
     tokens:game.tokens.map(t=>t.state+':'+t.trackIdx+':'+t.homeIdx).join('|')})};

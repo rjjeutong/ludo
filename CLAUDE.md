@@ -156,6 +156,10 @@ board.
   host bumps `game/id` and clears the flags; every client restarts on the id change.
 - **Disconnect:** each client sets `onDisconnect().update({status:'abandoned'})`; any drop
   flips the room and the others show "a player left — the game ended".
+- **Chat:** `messages` is a persistent push feed (survives rematches). `attachChat()` shows
+  the chat card and subscribes once per room; `sendChatMsg()` pushes `{seat,text,ts}`;
+  `appendChatMsg()` renders each line labelled by the sender's color ("You" for `mySeat`),
+  with the body added as a text node (no HTML injection).
 - Firebase compat SDK (app/database/auth) is loaded from CDN in `<head>`. To use a dedicated
   Ludo project instead, swap `FIREBASE_CONFIG`.
 
@@ -167,10 +171,9 @@ The turn engine is seat-based: `controllers[seat] = 'human' | 'ai'` and every ch
 1. **vs Computer** (done) — human seat 0, AI seats from settings.
 2. **Online via Firebase** (done) — 2–4 seats, any mix of humans (one client each) and
    host-driven AI; see the Online section above.
-3. **Pass & play** (planned) — set multiple seats to `'human'` on one device; the input
+3. **Chat in online rooms** (done) — per-room `messages` feed, color-labelled by seat.
+4. **Pass & play** (planned) — set multiple seats to `'human'` on one device; the input
    layer already routes by current seat.
-4. **Chat in online rooms** (planned) — `attachChat()` is stubbed; mirror the checkers
-   `messages` push + `child_added` feed.
 
 ## Conventions
 
