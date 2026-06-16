@@ -26,6 +26,7 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 | AI | heuristic scorer over allowed pairs (`aiScore`/`aiPick`), tuned per `settings.difficulty` via `AI_PROFILES` (easy/medium/hard) |
 | Sound | Web Audio oscillator synth (`tone()` + `sfx` presets), no audio files |
 | Rendering | `draw()` on a continuous rAF loop; token slide animation steps cell-by-cell |
+| Online | Firebase Realtime DB room sync — `drivenByMe()`/`pumpRemote()`/`netSend()` replay rolls+moves; see the Online multiplayer section |
 | Input | canvas pointer hit-testing against actionable tokens |
 | UI | banner, roster, dice DOM, toasts, modals |
 
@@ -124,18 +125,52 @@ scales the capture/flee/avoid/wall weights and the jitter; `easy` also has a `bl
 chance to pick a random *legal* move outright. `aiProfile()` reads the active profile each
 decision. AI pacing is snappy: ~450 ms before rolling, ~250 ms before each move.
 
+## Online multiplayer (Firebase)
+
+Online play reuses the **same deterministic engine** on every client and syncs *inputs*,
+not state. The only randomness is the dice, so the seat that rolls broadcasts the value and
+everyone else replays it — given the same rolls + actions, every client reaches the same
+board.
+
+- **Backend:** reuses the Checkers Firebase project (its web config is public client config).
+  Ludo rooms live under `rooms/ludo-<code>` — a separate keyspace from Checkers' own
+  `rooms/<code>`, so the existing `rooms/$c` rule (`auth!=null` read/write) already covers
+  them and nothing collides. Anonymous auth, no sign-up.
+- **Drive model:** `online`, `isHost`, `mySeat` globals. `drivenByMe(seat)` = my own seat,
+  plus AI seats if I'm the host. `aiDrivenByMe(seat)` gates auto-roll/auto-move;
+  `myInteractiveTurn()` gates human input. Offline, all helpers fall through to the original
+  behaviour (every seat driven locally).
+- **Lobby:** host picks table size (2–4 active corners via `ACTIVE_SEATS`) and how many of
+  those are AI; the rest are human slots. Room doc holds `seats`, `ctl` (human/ai per seat),
+  `players` (seat→uid), shared `rules`, `status`, `game.id`. Host claims the first seat;
+  joiners claim the next empty human seat; host hits Start when all human slots are filled.
+- **Sync:** `netSend()` pushes `{k:'roll',seat,v}` / `{k:'act',seat,type,t,die}` to
+  `events/g<id>`; the `child_added` listener ignores events for seats *I* drive (already
+  applied locally) and queues the rest. `pumpRemote()` applies the next queued event only
+  when the local engine is at the matching phase (idle for a roll, dispatch for an act), so
+  animations stay ordered. `applyRemoteAct()` reconstructs the move's path via
+  `legalActionsFor` (deterministic — state is in lockstep). The host drives AI seats and
+  broadcasts their rolls/moves exactly like a human seat. Turn advancement needs no event —
+  it's deterministic from the inputs. **Undo is offline-only** (can't unsend a move).
+- **Rematch:** each human flags `rematch/<seat>`; once all human seats have flagged it the
+  host bumps `game/id` and clears the flags; every client restarts on the id change.
+- **Disconnect:** each client sets `onDisconnect().update({status:'abandoned'})`; any drop
+  flips the room and the others show "a player left — the game ended".
+- Firebase compat SDK (app/database/auth) is loaded from CDN in `<head>`. To use a dedicated
+  Ludo project instead, swap `FIREBASE_CONFIG`.
+
 ## Modes roadmap
 
 The turn engine is seat-based: `controllers[seat] = 'human' | 'ai'` and every choice is a
-**serializable action object** (`{type:'enter'|'move'|'free', t:tokenId}`), so new modes
-slot in without rework:
+**serializable action object** (`{type:'enter'|'move'|'free', t:tokenId}`):
 
 1. **vs Computer** (done) — human seat 0, AI seats from settings.
-2. **Pass & play** (planned) — set multiple seats to `'human'`; the input layer already
-   routes by current seat.
-3. **Online via Firebase** (planned) — add a `'remote'` controller that publishes the
-   local player's actions to a Realtime Database room and replays opponents' actions;
-   mirror the checkers repo's room-code + anonymous-auth approach.
+2. **Online via Firebase** (done) — 2–4 seats, any mix of humans (one client each) and
+   host-driven AI; see the Online section above.
+3. **Pass & play** (planned) — set multiple seats to `'human'` on one device; the input
+   layer already routes by current seat.
+4. **Chat in online rooms** (planned) — `attachChat()` is stubbed; mirror the checkers
+   `messages` push + `child_added` feed.
 
 ## Conventions
 

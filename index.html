@@ -4,11 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ludo — Night Carnival</title>
-<meta name="description" content="Classic Ludo with two twists: Prisoner rule and Wall rule. Play against the computer.">
+<meta name="description" content="Classic Ludo with two twists: Prisoner rule and Wall rule. Play the computer or friends online.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎲</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<!-- Firebase (compat SDK) — powers online multiplayer. Loaded from CDN, no build step. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg-deep:#100e22;
@@ -349,7 +353,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 13</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 14</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -391,6 +395,10 @@ footer a{color:var(--text-dim)}
       <div class="lab"><b>Sound</b><span>Dice, moves, captures &amp; fanfares.</span></div>
       <label class="toggle"><input type="checkbox" id="optSound" checked><span class="tr"></span><span class="th"></span></label>
     </div>
+    <div class="setting">
+      <div class="lab"><b>Multiplayer</b><span>Play with friends in real time — no account needed.</span></div>
+      <button class="btn" id="playOnlineBtn">🌐 Play Online</button>
+    </div>
     <div class="actions">
       <button class="btn ghost" id="newGameBtn">New Game</button>
       <button class="btn" id="closeSettings">Done</button>
@@ -421,6 +429,73 @@ footer a{color:var(--text-dim)}
     <div class="wname" id="winName"></div>
     <div class="actions" style="justify-content:center">
       <button class="btn" id="againBtn">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<!-- online multiplayer -->
+<div class="overlay" id="onlineOverlay">
+  <div class="modal">
+    <h2>Play Online</h2>
+    <p class="sub">Real-time games with friends — no account needed.</p>
+
+    <!-- pick -->
+    <div class="ol-screen" id="olPick">
+      <div class="actions" style="justify-content:center;flex-wrap:wrap">
+        <button class="btn" id="olCreateBtn">Create a room</button>
+        <button class="btn ghost" id="olJoinScreenBtn">Join with a code</button>
+        <button class="btn ghost" id="olCloseBtn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- create -->
+    <div class="ol-screen" id="olCreate" style="display:none">
+      <div class="setting">
+        <div class="lab"><b>Players at the table</b><span>Total seats in play.</span></div>
+        <div class="seg" id="olSizeSeg"><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button></div>
+      </div>
+      <div class="setting">
+        <div class="lab"><b>Computer players</b><span>The rest are humans (you + friends who join).</span></div>
+        <div class="seg" id="olAiSeg"></div>
+      </div>
+      <p class="sub" id="olCreateSummary" style="margin:10px 0 0"></p>
+      <div class="actions">
+        <button class="btn ghost" id="olCreateBack">Back</button>
+        <button class="btn" id="olCreateGo">Create room</button>
+      </div>
+    </div>
+
+    <!-- join -->
+    <div class="ol-screen" id="olJoin" style="display:none">
+      <p class="sub">Enter your host's 4-digit code:</p>
+      <input id="olCodeInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="0000"
+             style="width:100%;font-size:28px;letter-spacing:8px;text-align:center;padding:10px;border-radius:12px;border:1px solid var(--line,#3a356b);background:rgba(255,255,255,.06);color:inherit">
+      <div id="olJoinErr" class="ol-err" style="display:none;color:#ff8aa0;margin-top:8px">Room not found, full, or already started.</div>
+      <div class="actions">
+        <button class="btn ghost" id="olJoinBack">Back</button>
+        <button class="btn" id="olJoinGo">Join</button>
+      </div>
+    </div>
+
+    <!-- lobby (host shows code; everyone sees seats fill) -->
+    <div class="ol-screen" id="olLobby" style="display:none">
+      <div id="olCodeWrap" style="text-align:center;margin-bottom:12px">
+        <div class="sub" style="margin:0">Share this code:</div>
+        <div id="olCodeDisplay" style="font-size:40px;font-weight:800;letter-spacing:10px;color:var(--accent,#ffd479)">----</div>
+      </div>
+      <div id="olSeats" style="display:flex;flex-direction:column;gap:7px"></div>
+      <div class="actions">
+        <button class="btn ghost" id="olLeaveBtn">Leave</button>
+        <button class="btn" id="olStartBtn" style="display:none">Start game</button>
+      </div>
+    </div>
+
+    <!-- message / spinner -->
+    <div class="ol-screen" id="olMsg" style="display:none;text-align:center">
+      <p class="sub" id="olMsgText" style="font-size:15px">Connecting…</p>
+      <div class="actions" style="justify-content:center">
+        <button class="btn" id="olMsgBtn" style="display:none">OK</button>
+      </div>
     </div>
   </div>
 </div>
@@ -539,12 +614,24 @@ const game = {
 function later(fn, ms){ const g=game.gen; setTimeout(()=>{ if(g===game.gen) fn(); }, ms); }
 const seatActive = p => game.order.includes(p);
 const curSeat = ()=> game.order[game.turn];
-// Seat controllers: 'human' | 'ai'. Pass-and-play = more 'human' seats;
-// online = a future 'remote' controller fed by serialized actions.
+// Seat controllers: 'human' | 'ai' (same on every client). Online adds a network
+// layer on top: each client drives only its own seat (+ the host drives AI seats)
+// and replays everyone else's rolls/moves — see the Online section near the bottom.
 const controllers = [];
 const isAI = p => controllers[p]==='ai';
+// ---- online drive model (all no-ops offline) ----
+let online=false, isHost=false, mySeat=null;
+// Which seats this client generates input for: its own seat, plus AI seats if host.
+const drivenByMe   = seat => !online || seat===mySeat || (isHost && controllers[seat]==='ai');
+// Seats this client should auto-roll/auto-move for (AI it owns). Offline: every AI seat.
+const aiDrivenByMe = seat => controllers[seat]==='ai' && drivenByMe(seat);
+// Can the local human touch the board / roll right now?
+const myInteractiveTurn = ()=> online ? (curSeat()===mySeat) : !isAI(curSeat());
+// pumpRemote() / netSend() are declared in the Online section below (hoisted).
 
 function newGame(){
+  if(online) cleanupOnline();              // a local New Game leaves any online room
+  online=false; isHost=false; mySeat=null;
   const h = [0,1,2,3].includes(settings.humanSeat) ? settings.humanSeat : 0;
   const layout = {1:[h,(h+2)%4], 2:[h,(h+1)%4,(h+2)%4], 3:[0,1,2,3]}[settings.aiCount];
   const seats = layout.slice().sort((a,b)=>a-b);     // ascending = clockwise
@@ -751,14 +838,19 @@ function startTurn(){
   game.mustCapture=false;
   game.phase='idle';
   updateRoster(); updateBanner(); updateDie(); updateDiceQueue(); updateUndoBtn();
-  if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
+  if(aiDrivenByMe(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
+  else pumpRemote();                          // online: a seat I don't drive — replay its roll
 }
-function doRoll(){
+// `forced` is supplied when replaying a remote/host roll; otherwise we draw a fair value.
+function doRoll(forced){
   if(game.phase!=='idle') return;
+  const replay = forced!==undefined;
+  if(!replay && online && !drivenByMe(curSeat())) return;   // not my seat to roll
   game.phase='rolling';
   updateDie(); updateBanner();
   sfx.roll();
-  const v = 1 + Math.floor(Math.random()*6);
+  const v = replay ? forced : 1 + Math.floor(Math.random()*6);
+  if(!replay && online) netSend({k:'roll', seat:curSeat(), v});
   dieEl.classList.add('rolling');
   let flicks = 0;
   const flick = setInterval(()=>{ setDieFace(1+Math.floor(Math.random()*6)); if(++flicks>6) clearInterval(flick); }, 80);
@@ -772,8 +864,9 @@ function doRoll(){
       sfx.six();
       game.phase='idle';                       // a 6 means: roll again before moving
       updateDie(); updateBanner();
-      if(isAI(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
-      else toast('A 6! Roll again — you move after the rolling stops');
+      if(aiDrivenByMe(curSeat())) later(()=>{ if(game.phase==='idle') doRoll(); }, 450);
+      else if(online && !drivenByMe(curSeat())) pumpRemote();
+      else if(myInteractiveTurn()) toast('A 6! Roll again — you move after the rolling stops');
     } else {
       beginDispatch();
     }
@@ -796,12 +889,15 @@ function beginDispatch(){
     game.selDie = game.dice.find(d=>game.allowed.some(pr=>pr.die===d)) ?? null;
   game.dieChosen = false;                  // fresh step: a multi-die piece must be told which die
   updateDiceQueue(); updateUndoBtn();
-  if(isAI(p)) later(()=>{ if(game.phase==='dispatch') performPair(aiPick(p, game.allowed)); }, 250);
-  else if(game.mustCapture) toast('⚔ Capture is mandatory — capturing routes stay lit');
+  if(aiDrivenByMe(p)) later(()=>{ if(game.phase==='dispatch') performPair(aiPick(p, game.allowed)); }, 250);
+  else if(online && !drivenByMe(p)) pumpRemote();   // replay the move this seat's owner makes
+  else if(game.mustCapture && myInteractiveTurn()) toast('⚔ Capture is mandatory — capturing routes stay lit');
 }
-function performPair(pr){
+function performPair(pr, replay){
   if(game.phase!=='dispatch' || !pr) return;
-  if(!isAI(curSeat()))                      // let the human take this move back (deferred capture = clean rollback)
+  if(online && !replay && drivenByMe(curSeat()))   // tell the other clients what this seat did
+    netSend({k:'act', seat:curSeat(), type:pr.act.type, t:pr.act.t, die:pr.die});
+  if(!online && !isAI(curSeat()))           // undo is offline-only (can't unsend a broadcast move)
     game.undoStack.push({tokens:cloneToks(game.tokens), dice:[...game.dice], selDie:game.selDie});
   game.phase='animating';
   game.dice.splice(game.dice.indexOf(pr.die), 1);
@@ -1307,7 +1403,7 @@ function pairForToken(tokId){
   return 'ambiguous';
 }
 canvas.addEventListener('pointerdown', e=>{
-  if(game.phase!=='dispatch' || isAI(curSeat())) return;
+  if(game.phase!=='dispatch' || !myInteractiveTurn()) return;
   const rect=canvas.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
   let hitId=null, bestD=1e9;
@@ -1331,7 +1427,7 @@ canvas.addEventListener('pointerdown', e=>{
   if(pr) performPair(pr);
 });
 canvas.addEventListener('pointermove', e=>{
-  if(game.phase!=='dispatch' || isAI(curSeat())){ canvas.style.cursor='default'; return; }
+  if(game.phase!=='dispatch' || !myInteractiveTurn()){ canvas.style.cursor='default'; return; }
   const rect=canvas.getBoundingClientRect();
   const x=e.clientX-rect.left, y=e.clientY-rect.top;
   const hit=game.allowed.some(pr=>{
@@ -1359,9 +1455,9 @@ function setDieFace(v){
   const pips=dieEl.children;
   for(let i=0;i<9;i++) pips[i].classList.toggle('on', PIP_MAP[v].includes(i));
 }
-const seatName = p => controllers[p]==='human' ? 'You' : SEATS[p].label;
+const seatName = p => ((online ? p===mySeat : controllers[p]==='human') ? 'You' : SEATS[p].label);
 function updateDie(){
-  const humanIdle = game.phase==='idle' && !isAI(curSeat()) && game.winner==null;
+  const humanIdle = game.phase==='idle' && myInteractiveTurn() && game.winner==null;
   rollBtn.disabled = !humanIdle;
   rollBtn.textContent = (humanIdle && game.lastRoll===6) ? 'Roll again!' : 'Roll';
   rollBtn.classList.toggle('pulse', humanIdle && game.lastRoll===6);
@@ -1388,18 +1484,20 @@ function updateBanner(){
   const p=curSeat()??0;
   turnChip.style.color = SEATS[p].main;
   let msg, warn=false;
+  const mine = myInteractiveTurn();          // is the current seat the local human's?
   if(game.winner!=null) msg = `${seatName(game.winner)} won the game!`;
-  else if(isAI(p)) msg = game.phase==='dispatch' ? `${seatName(p)} is moving…` : `${seatName(p)} is rolling…`;
+  else if(online && game.phase==='over'){ msg = '🚪 A player left — the game ended.'; warn=true; }
+  else if(!mine) msg = `${seatName(p)} is ${game.phase==='dispatch'?'moving':'rolling'}…`;
   else if(game.phase==='dispatch'){
     if(game.mustCapture){ msg = '⚔ Capture is mandatory — use a lit token'; warn=true; }
     else msg = game.dice.length>1 ? `Spend your dice (${game.dice.join(', ')}) — tap a die, then a token` : 'Your move — tap a glowing token';
   }
   else if(game.lastRoll===6 && game.phase==='idle') { msg='A 6! Roll again'; warn=true; }
-  else msg = 'Your turn — roll the die!';
+  else msg = online ? `Your turn — roll the die! (You are ${SEATS[mySeat].label})` : 'Your turn — roll the die!';
   turnMsg.textContent=msg;
   bannerEl.classList.toggle('warn', warn);
-  rollHint.classList.toggle('warn', game.mustCapture && !isAI(p) && game.phase==='dispatch');
-  if(game.mustCapture && !isAI(p) && game.phase==='dispatch') rollHint.textContent='Capture is mandatory this turn.';
+  rollHint.classList.toggle('warn', game.mustCapture && mine && game.phase==='dispatch');
+  if(game.mustCapture && mine && game.phase==='dispatch') rollHint.textContent='Capture is mandatory this turn.';
   else if(game.dice.length) rollHint.textContent = `Pending dice: ${game.dice.join(' · ')}`;
   else rollHint.textContent = 'Keep rolling while you get 6s.';
 }
@@ -1428,13 +1526,15 @@ function toast(msg){
 function showOverlay(o){ o.classList.add('show'); }
 function hideOverlay(o){ o.classList.remove('show'); }
 function showWin(){
-  const p=game.winner, won = controllers[p]==='human';
+  const p=game.winner, won = online ? p===mySeat : controllers[p]==='human';
   document.getElementById('winEmoji').textContent = won?'🏆':'🎪';
   document.getElementById('winTitle').textContent = won?'Victory!':`${SEATS[p].label} wins`;
   document.getElementById('winName').textContent = won
     ? 'All of your tokens made it home. Take a bow!'
     : 'Better luck next round — the carnival never sleeps.';
   won?sfx.win():sfx.lose();
+  const again=document.getElementById('againBtn');
+  again.textContent = online ? 'Rematch' : 'Play Again';   // online: rematch keeps the room
   showOverlay(winOverlay);
 }
 
@@ -1514,10 +1614,255 @@ rulesOverlay.addEventListener('click', e=>{ if(e.target===rulesOverlay) hideOver
 document.getElementById('closeSettings').addEventListener('click', ()=>hideOverlay(settingsOverlay));
 settingsOverlay.addEventListener('click', e=>{ if(e.target===settingsOverlay) hideOverlay(settingsOverlay); });
 document.getElementById('newGameBtn').addEventListener('click', ()=>{ hideOverlay(settingsOverlay); newGame(); toast('New game'); });
-document.getElementById('againBtn').addEventListener('click', ()=>newGame());
-rollBtn.addEventListener('click', ()=>{ if(!isAI(curSeat())) doRoll(); });
-dieEl.addEventListener('click', ()=>{ if(!isAI(curSeat())) doRoll(); });
+document.getElementById('againBtn').addEventListener('click', ()=>{
+  if(online){ hideOverlay(winOverlay); requestRematch(); } else newGame();
+});
+rollBtn.addEventListener('click', ()=>{ if(myInteractiveTurn()) doRoll(); });
+dieEl.addEventListener('click', ()=>{ if(myInteractiveTurn()) doRoll(); });
 window.addEventListener('resize', resize);
+
+/* ===================== online multiplayer (Firebase) ===================== */
+// Reuses the Checkers Firebase project (its web config is public client config).
+// Ludo rooms live under `rooms/ludo-<code>`, a separate keyspace from Checkers'
+// own `rooms/<code>`, so the two never collide and the existing `rooms` security
+// rule ({".read":"auth!=null", ".write":"auth!=null"}) already covers them.
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDpS2_uKDB0XGqw25hH1fiKG5YM7X2AIS0",
+  authDomain:        "checkers-online-351e3.firebaseapp.com",
+  databaseURL:       "https://checkers-online-351e3-default-rtdb.firebaseio.com",
+  projectId:         "checkers-online-351e3",
+  storageBucket:     "checkers-online-351e3.firebasestorage.app",
+  messagingSenderId: "55085072845",
+  appId:             "1:55085072845:web:c38767e6b301a598cac484",
+};
+const ACTIVE_SEATS = {2:[0,2], 3:[0,1,2], 4:[0,1,2,3]};   // which corners are in play
+let _fbApp=null,_fbDb=null,_fbAuth=null,myUid=null;
+let roomRef=null, roomListener=null, eventsRef=null, eventsListener=null, chatRef=null, chatListener=null;
+let roomData=null, gameIdOnline=0, roomCode=null;
+let remoteQueue=[];                          // buffered roll/act events for seats I don't drive
+const olCfg={size:4, ai:0};
+
+function initFirebase(){
+  if(_fbApp) return true;
+  if(typeof firebase==='undefined'){ olMsg('Could not reach Firebase. Check your connection.', true); return false; }
+  try{ _fbApp=firebase.initializeApp(FIREBASE_CONFIG); _fbDb=firebase.database(); _fbAuth=firebase.auth(); return true; }
+  catch(e){ olMsg('Firebase init failed: '+e.message, true); return false; }
+}
+async function signIn(){ if(myUid) return myUid; const r=await _fbAuth.signInAnonymously(); myUid=r.user.uid; return myUid; }
+const roomPath = code => 'rooms/ludo-'+code;
+
+/* ---- overlay screen helpers ---- */
+function olScreen(name){ ['Pick','Create','Join','Lobby','Msg'].forEach(s=>{ document.getElementById('ol'+s).style.display = (s.toLowerCase()===name)?'':'none'; }); }
+function olMsg(text, ok){ olScreen('msg'); document.getElementById('olMsgText').textContent=text; document.getElementById('olMsgBtn').style.display=ok?'':'none'; }
+function openOnline(){ hideOverlay(settingsOverlay); olScreen('pick'); showOverlay(onlineOverlay); }
+
+/* ---- create-room config UI ---- */
+function renderAiSeg(){
+  const seg=document.getElementById('olAiSeg'); seg.innerHTML='';
+  for(let n=0;n<olCfg.size;n++){                         // at least one human (the host)
+    const b=document.createElement('button'); b.dataset.n=n; b.textContent=n;
+    if(n===olCfg.ai) b.classList.add('sel');
+    seg.appendChild(b);
+  }
+  const humans = olCfg.size - olCfg.ai;
+  document.getElementById('olCreateSummary').textContent =
+    `${humans} human${humans>1?'s':''} (you + ${humans-1} joining) · ${olCfg.ai} computer player${olCfg.ai===1?'':'s'}.`;
+}
+function setSize(n){ olCfg.size=n; if(olCfg.ai>n-1) olCfg.ai=n-1;
+  [...document.getElementById('olSizeSeg').children].forEach(b=>b.classList.toggle('sel',+b.dataset.n===n));
+  renderAiSeg();
+}
+
+/* ---- create / join ---- */
+async function createRoom(){
+  if(!initFirebase()) return;
+  olMsg('Creating room…');
+  try{
+    const uid=await signIn();
+    const code=String(Math.floor(1000+Math.random()*9000));
+    const seats=ACTIVE_SEATS[olCfg.size];
+    const humansNeeded=olCfg.size-olCfg.ai;
+    const ctl={}, players={};
+    seats.forEach((s,i)=>{ ctl[s] = i<humansNeeded ? 'human' : 'ai'; });
+    players[seats[0]]=uid;                               // host takes the first seat
+    const data={ host:uid, status:'waiting', createdAt:Date.now(),
+      size:olCfg.size, ai:olCfg.ai, seats, ctl, players,
+      rules:{ tokenCount:settings.tokenCount, wall:settings.wall, prisoner:settings.prisoner, difficulty:settings.difficulty },
+      game:{id:1} };
+    roomRef=_fbDb.ref(roomPath(code));
+    await roomRef.set(data);
+    roomRef.onDisconnect().update({status:'abandoned'});
+    online=true; isHost=true; roomCode=code; mySeat=seats[0];
+    document.getElementById('olCodeDisplay').textContent=code;
+    document.getElementById('olCodeWrap').style.display='';
+    listenRoom();
+    olScreen('lobby');
+  }catch(e){ olMsg('Error: '+e.message, true); }
+}
+async function joinRoom(){
+  if(!initFirebase()) return;
+  const code=document.getElementById('olCodeInput').value.trim();
+  const err=document.getElementById('olJoinErr');
+  if(!/^\d{4}$/.test(code)){ err.style.display=''; return; }
+  err.style.display='none'; olMsg('Joining…');
+  try{
+    const uid=await signIn();
+    const ref=_fbDb.ref(roomPath(code));
+    const snap=await ref.once('value'); const d=snap.val();
+    if(!d || d.status!=='waiting'){ olMsg('Room not found or already started.', true); return; }
+    // claim the first empty human seat
+    const seat = d.seats.find(s => d.ctl[s]==='human' && !(d.players&&d.players[s]));
+    if(seat===undefined){ olMsg('That room is already full.', true); return; }
+    online=true; isHost=false; roomCode=code; mySeat=seat;
+    roomRef=ref;
+    await ref.child('players/'+seat).set(uid);
+    roomRef.onDisconnect().update({status:'abandoned'});
+    document.getElementById('olCodeWrap').style.display='none';
+    listenRoom();
+    olScreen('lobby');
+  }catch(e){ olMsg('Error: '+e.message, true); }
+}
+
+/* ---- lobby: watch the room fill, then start ---- */
+function listenRoom(){
+  if(roomListener) roomRef.off('value', roomListener);
+  roomListener=roomRef.on('value', snap=>{
+    const d=snap.val(); if(!d) return;
+    roomData=d;
+    if(d.status==='abandoned' && game.winner==null && gameIdOnline>0){ onlineEnded('A player left — the game ended.'); return; }
+    const humanSeats=d.seats.filter(s=>d.ctl[s]==='human');
+    const allHere=humanSeats.every(s=>d.players && d.players[s]);
+    if(onlineOverlay.classList.contains('show')){
+      renderLobbySeats(d);
+      const startBtn=document.getElementById('olStartBtn');
+      if(isHost) startBtn.style.display = (d.status==='waiting' && allHere) ? '' : 'none';
+    }
+    // any status='playing' with a new game id (re)starts the synced game on every client
+    if(d.status==='playing' && d.game && d.game.id!==gameIdOnline){ startOnlineGame(d); }
+    // rematch: once every human has flagged it, the host bumps the game id and clears flags
+    if(isHost && d.status==='playing' && d.rematch && humanSeats.every(s=>d.rematch[s])){
+      roomRef.update({ 'game/id': d.game.id+1, rematch:null });
+    }
+  });
+}
+function renderLobbySeats(d){
+  const wrap=document.getElementById('olSeats'); if(!wrap) return;
+  wrap.innerHTML='';
+  for(const s of d.seats){
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.05)';
+    const dot=`<span style="width:13px;height:13px;border-radius:50%;background:${SEATS[s].main};display:inline-block"></span>`;
+    let who;
+    if(d.ctl[s]==='ai') who='Computer';
+    else if(d.players && d.players[s]) who = (s===mySeat?'You':'Player')+' ✓';
+    else who='<span style="opacity:.6">waiting…</span>';
+    row.innerHTML=`${dot}<b style="min-width:70px">${SEATS[s].label}</b><span>${who}</span>`;
+    wrap.appendChild(row);
+  }
+  const startBtn=document.getElementById('olStartBtn');
+  if(!isHost) startBtn.style.display='none';
+}
+function hostStart(){ if(isHost && roomRef) roomRef.update({status:'playing'}); }
+
+/* ---- run the synced game ---- */
+function startOnlineGame(d){
+  gameIdOnline=d.game.id;
+  closeOnlineOverlay();
+  online=true;
+  // adopt the host's rules so every client's engine behaves identically
+  settings.tokenCount=d.rules.tokenCount; settings.wall=d.rules.wall;
+  settings.prisoner=d.rules.prisoner; settings.difficulty=d.rules.difficulty;
+  controllers.length=0;
+  for(let p=0;p<4;p++) controllers[p]=null;
+  for(const s of d.seats) controllers[s]=d.ctl[s];       // 'human' | 'ai'
+  // roles alternate by game-id parity so the first-move seat rotates on rematch
+  mySeat = +Object.keys(d.players).find(s=>d.players[s]===myUid);
+  game.order = d.seats.slice();                          // ascending = clockwise, host (seat 0) first
+  game.tokens=[];
+  for(const p of game.order)
+    for(let s=0;s<settings.tokenCount;s++)
+      game.tokens.push({id:`${p}-${s}`, seat:p, slot:s, state:'base', trackIdx:-1, homeIdx:-1, heldBy:-1});
+  game.turn=0; game.dice=[]; game.lastRoll=null; game.selDie=null; game.dieChosen=false;
+  game.undoStack=[]; game.phase='idle'; game.allowed=[]; game.blockedIds=new Set();
+  game.mustCapture=false; game.winner=null; game.gen++;
+  anim=null; effects.length=0; remoteQueue=[];
+  hideOverlay(winOverlay);
+  attachEvents(); attachChat();
+  resize();
+  startTurn();
+  toast(`Online game on — you are ${SEATS[mySeat].label}`);
+}
+function attachEvents(){
+  if(eventsListener && eventsRef) eventsRef.off('child_added', eventsListener);
+  eventsRef=roomRef.child('events/g'+gameIdOnline);
+  eventsListener=eventsRef.on('child_added', snap=>{
+    const e=snap.val(); if(!e) return;
+    if(drivenByMe(e.seat)) return;        // my own event echoing back — already applied locally
+    remoteQueue.push(e); pumpRemote();
+  });
+}
+function netSend(e){ if(eventsRef){ e.ts=Date.now(); eventsRef.push(e); } }
+function pumpRemote(){
+  if(!online || !remoteQueue.length) return;
+  const e=remoteQueue[0];
+  if(drivenByMe(e.seat)){ remoteQueue.shift(); return pumpRemote(); }
+  if(e.seat!==curSeat()) return;          // not this seat's turn on our clock yet — wait
+  if(e.k==='roll'){ if(game.phase!=='idle') return; remoteQueue.shift(); doRoll(e.v); }
+  else if(e.k==='act'){
+    if(game.phase!=='dispatch') return;
+    remoteQueue.shift(); applyRemoteAct(e);
+  }
+}
+function applyRemoteAct(e){
+  const acts=legalActionsFor(game.tokens, e.seat, e.die);
+  const act=acts.find(a=>a.type===e.type && a.t===e.t);
+  if(!act){ onlineEnded('Game out of sync — please start a new room.'); return; }
+  game.selDie=e.die; game.dieChosen=true;
+  performPair({die:e.die, act}, true);
+}
+
+/* ---- rematch / disconnect / chat ---- */
+function requestRematch(){
+  if(!roomRef || mySeat==null) return;
+  roomRef.child('rematch/'+mySeat).set(true);
+  toast('Waiting for the other players to rematch…');
+}
+function onlineEnded(text){
+  game.phase='over';
+  toast(text);
+  updateBanner(); updateDie(); updateUndoBtn();
+}
+function attachChat(){ /* chat hook reserved for a later pass */ }
+function closeOnlineOverlay(){ hideOverlay(onlineOverlay); }
+function leaveOnline(){
+  if(roomRef){ roomRef.update({status:'abandoned'}); }
+  cleanupOnline(); closeOnlineOverlay(); newGame();
+}
+function cleanupOnline(){
+  if(eventsRef && eventsListener) eventsRef.off('child_added', eventsListener);
+  if(roomRef && roomListener) roomRef.off('value', roomListener);
+  if(chatRef && chatListener) chatRef.off('child_added', chatListener);
+  if(roomRef) try{ roomRef.onDisconnect().cancel(); }catch(e){}
+  eventsRef=roomRef=chatRef=null; eventsListener=roomListener=chatListener=null;
+  roomData=null; gameIdOnline=0; remoteQueue=[]; roomCode=null;
+}
+
+/* ---- online overlay wiring ---- */
+const onlineOverlay=document.getElementById('onlineOverlay');
+document.getElementById('playOnlineBtn').addEventListener('click', openOnline);
+document.getElementById('olCreateBtn').addEventListener('click', ()=>{ olScreen('create'); setSize(olCfg.size); });
+document.getElementById('olJoinScreenBtn').addEventListener('click', ()=>{ document.getElementById('olJoinErr').style.display='none'; olScreen('join'); });
+document.getElementById('olCloseBtn').addEventListener('click', closeOnlineOverlay);
+document.getElementById('olSizeSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) setSize(+b.dataset.n); });
+document.getElementById('olAiSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b){ olCfg.ai=+b.dataset.n; renderAiSeg(); } });
+document.getElementById('olCreateBack').addEventListener('click', ()=>olScreen('pick'));
+document.getElementById('olCreateGo').addEventListener('click', createRoom);
+document.getElementById('olJoinBack').addEventListener('click', ()=>olScreen('pick'));
+document.getElementById('olJoinGo').addEventListener('click', joinRoom);
+document.getElementById('olLeaveBtn').addEventListener('click', leaveOnline);
+document.getElementById('olStartBtn').addEventListener('click', hostStart);
+document.getElementById('olMsgBtn').addEventListener('click', ()=>olScreen('pick'));
+onlineOverlay.addEventListener('click', e=>{ if(e.target===onlineOverlay && !online) closeOnlineOverlay(); });
 
 /* ---------- boot ---------- */
 document.getElementById('optPrisoner').checked = settings.prisoner;
@@ -1530,7 +1875,11 @@ requestAnimationFrame(loop);
 // debug hook (handy in devtools / automated tests)
 window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, performPair,
   bestOutcome, cloneToks, actionCaptureVictims, tokenById, doRoll, beginDispatch,
-  undoMove, aiPick, AI_PROFILES, THEMES, SEATS, START, TRACK};
+  undoMove, aiPick, AI_PROFILES, THEMES, SEATS, START, TRACK,
+  openOnline, createRoom, joinRoom, hostStart, leaveOnline, requestRematch, olCfg,
+  net:()=>({online, isHost, mySeat, roomCode, gameIdOnline, phase:game.phase, turn:curSeat(),
+    controllers:[...controllers], queue:remoteQueue.length,
+    tokens:game.tokens.map(t=>t.state+':'+t.trackIdx+':'+t.homeIdx).join('|')})};
 </script>
 </body>
 </html>
