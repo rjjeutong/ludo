@@ -378,7 +378,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 15</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 16</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -1133,6 +1133,15 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 const px = (c)=> (c+0.5)*S;          // cell -> center pixel
+// Per-player view: rotate the board in 90° steps so YOUR corner sits bottom-left.
+// Online → your seat; offline → the seat you picked. Seat 0 (default) ⇒ no rotation.
+const viewSeat = ()=> online ? (mySeat==null?0:mySeat) : (settings.humanSeat||0);
+const viewRot  = ()=> -viewSeat() * Math.PI/2;
+function unrotatePoint(x,y){          // screen px → logical board px (inverse of the draw rotation)
+  const r=viewRot(); if(!r) return {x,y};
+  const c=N*S/2, dx=x-c, dy=y-c, cs=Math.cos(-r), sn=Math.sin(-r);
+  return { x:c+dx*cs-dy*sn, y:c+dx*sn+dy*cs };
+}
 function cellXY(cell){
   if(cell.kind==='track'){ const t=TRACK[cell.idx]; return {x:px(t.c), y:px(t.r)}; }
   if(cell.kind==='home'){ const h=homeCell(cell.p, cell.h); return {x:px(h.c), y:px(h.r)}; }
@@ -1210,6 +1219,9 @@ function drawCage(x,y,R,seat){
 function draw(now){
   const size=N*S, T=TH();
   ctx.clearRect(0,0,size,size);
+  const rot=viewRot();
+  ctx.save();
+  if(rot){ const c=size/2; ctx.translate(c,c); ctx.rotate(rot); ctx.translate(-c,-c); }
   // board felt
   const bg=ctx.createLinearGradient(0,0,size,size);
   bg.addColorStop(0,T.felt[0]); bg.addColorStop(.5,T.felt[1]); bg.addColorStop(1,T.felt[2]);
@@ -1226,6 +1238,7 @@ function draw(now){
   drawEffects(now);
   drawTokens(now);
   drawAnim(now);
+  ctx.restore();
 }
 function drawBases(now){
   const T=TH();
@@ -1370,7 +1383,8 @@ function drawTokens(now){
       ctx.fillStyle='#16122e'; ctx.fill();
       ctx.fillStyle='#ffd479'; ctx.font=`800 ${S*0.24}px Nunito`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(here.length, x+S*0.3, y-S*0.31);
+      ctx.save(); ctx.translate(x+S*0.3, y-S*0.31); ctx.rotate(-viewRot());   // keep the count upright
+      ctx.fillText(here.length, 0, 0); ctx.restore();
     }
   }
   // jailed tokens (caged, next to capturer's base)
@@ -1430,7 +1444,8 @@ function pairForToken(tokId){
 canvas.addEventListener('pointerdown', e=>{
   if(game.phase!=='dispatch' || !myInteractiveTurn()) return;
   const rect=canvas.getBoundingClientRect();
-  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const pt=unrotatePoint(e.clientX-rect.left, e.clientY-rect.top);   // undo per-player rotation
+  const x=pt.x, y=pt.y;
   let hitId=null, bestD=1e9;
   const candidates = new Set([...game.allowed.map(pr=>pr.act.t), ...game.blockedIds]);
   for(const id of candidates){
@@ -1454,7 +1469,8 @@ canvas.addEventListener('pointerdown', e=>{
 canvas.addEventListener('pointermove', e=>{
   if(game.phase!=='dispatch' || !myInteractiveTurn()){ canvas.style.cursor='default'; return; }
   const rect=canvas.getBoundingClientRect();
-  const x=e.clientX-rect.left, y=e.clientY-rect.top;
+  const pt=unrotatePoint(e.clientX-rect.left, e.clientY-rect.top);
+  const x=pt.x, y=pt.y;
   const hit=game.allowed.some(pr=>{
     const p=tokenXY(tokenById(pr.act.t));
     return Math.hypot(p.x-x,p.y-y)<S*0.85;
@@ -1929,6 +1945,7 @@ window.__ludo = {game, settings, newGame, legalActionsFor, computeAllowed, perfo
   bestOutcome, cloneToks, actionCaptureVictims, tokenById, doRoll, beginDispatch,
   undoMove, aiPick, AI_PROFILES, THEMES, SEATS, START, TRACK,
   openOnline, createRoom, joinRoom, hostStart, leaveOnline, requestRematch, sendChatMsg, olCfg,
+  tokenXY, viewRot, unrotatePoint,
   net:()=>({online, isHost, mySeat, roomCode, gameIdOnline, phase:game.phase, turn:curSeat(),
     controllers:[...controllers], queue:remoteQueue.length,
     tokens:game.tokens.map(t=>t.state+':'+t.trackIdx+':'+t.homeIdx).join('|')})};

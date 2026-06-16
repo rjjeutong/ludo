@@ -47,6 +47,14 @@ Turn order is clockwise (ascending seat index), rotated so the human rolls first
 Active seats: 1 AI → human + opposite corner, 2 AI → human + next two clockwise,
 3 AI → all four.
 
+**Per-player view rotation**: the whole board is rendered rotated in 90° steps so the
+local player's corner sits bottom-left — `viewSeat()` (online → `mySeat`, offline →
+`settings.humanSeat`) and `viewRot()` = `-viewSeat()*90°`. `draw()` wraps everything in a
+single `translate/rotate/translate` about the board center; pointer input is mapped back
+with `unrotatePoint()` (the inverse rotation). The square felt is rotation-symmetric so
+90° steps never clip; the only counter-rotated element is the stack-count badge text (kept
+upright). Seat 0 ⇒ no rotation, so the common case is unchanged.
+
 **Board themes**: `THEMES` (carnival / classic / wood / neon) holds every board-drawing
 color; the renderer reads `TH()` each frame, and page chrome switches via
 `body[data-theme]` CSS variable overrides. Player token colors never change with theme.
