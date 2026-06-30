@@ -378,7 +378,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 16</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 18</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -1027,9 +1027,9 @@ function updateUndoBtn(){
 // Difficulty tunes only how *well* the AI plays — never the dice (which stay a
 // fair 1–6 for everyone). Easy blunders often and ignores danger; Hard is sharp.
 const AI_PROFILES = {
-  easy:   { jitter:18, blunder:0.32, capture:14, flee:1,  avoid:2,  wall:2 },
-  medium: { jitter:2,  blunder:0,    capture:40, flee:9,  avoid:11, wall:7 },
-  hard:   { jitter:0.5,blunder:0,    capture:48, flee:12, avoid:14, wall:9 },
+  easy:   { jitter:18, blunder:0.32, capture:14, flee:1,  avoid:2,  wall:2, hunt:0 },
+  medium: { jitter:2,  blunder:0,    capture:40, flee:9,  avoid:11, wall:7, hunt:2 },
+  hard:   { jitter:0.5,blunder:0,    capture:48, flee:12, avoid:14, wall:9, hunt:3 },
 };
 const aiProfile = ()=> AI_PROFILES[settings.difficulty] || AI_PROFILES.medium;
 function dangerAt(p, absIdx){
@@ -1041,6 +1041,64 @@ function dangerAt(p, absIdx){
     if(dist>=1 && dist<=6 && relOf(t.seat, t.trackIdx)+dist<=50) d++;
   }
   return d;
+}
+// Offense: how much I menace opponents by coming to rest at absIdx — the mirror of
+// dangerAt. Resting 1..6 squares behind a track enemy means I can capture them on my
+// next roll; advanced prey (closing on home) is worth chasing hardest. Enemies safe on
+// a star can't be taken, so they don't count.
+function threatAt(p, absIdx){
+  if(SAFE.has(absIdx)) return 0;
+  let s=0;
+  for(const t of game.tokens){
+    if(t.seat===p || t.state!=='track' || SAFE.has(t.trackIdx)) continue;
+    const dist=(t.trackIdx - absIdx + 52)%52;       // dice I'd need to land on them next turn
+    if(dist>=1 && dist<=6){
+      const prog = relOf(t.seat, t.trackIdx);        // 0..50, how close the prey is to home
+      s += (1 + prog*0.12 + (prog>=45 ? 6 : 0)) * (1 + winThreat(t.seat));
+    }
+  }
+  return s;
+}
+// How far along a seat is in the whole race, 0 (untouched) → 1 (everyone home).
+// done counts most; this is what flags the runaway leader so the others gang up.
+function seatProgress(seat){
+  const toks = tokensOf(seat); if(!toks.length) return 0;
+  let s=0;
+  for(const t of toks){
+    if(t.state==='done')      s+=60;
+    else if(t.state==='home') s+=51+t.homeIdx;
+    else if(t.state==='track')s+=relOf(seat, t.trackIdx);
+  }
+  return s/(toks.length*60);
+}
+// "Stop the winner" urgency for a target seat: how close they are to victory, made
+// sharper as they near the line and when they have few tokens left to shepherd home
+// (so the lone survivor of an almost-finished player is the prime target — the wall case).
+function winThreat(seat){
+  const toks = tokensOf(seat); if(!toks.length) return 0;
+  const live = toks.filter(t=>t.state!=='done').length;
+  const prog = seatProgress(seat);
+  return prog*prog * (live<=1 ? 1.8 : live===2 ? 1.3 : 1);
+}
+// Worth of capturing victim v: base + how advanced v is + a near-home kicker + extra
+// when jailing — all amplified when v belongs to the player who's running away with it.
+const captureValue = (A,v)=>{
+  const prog = relOf(v.seat, v.trackIdx);
+  const base = A.capture + prog*0.5 + (prog>=45 ? 14 : 0) + (settings.prisoner ? 12 : 0);
+  return base + winThreat(v.seat)*A.capture*0.8;     // gang up on the leader
+};
+// Value of resting a wall (2+ of my tokens) on `dest`: it denies each enemy ahead the
+// die rolls that would land on or cross it (rolls dist..6), weighted hard toward the
+// front-runner. A wall one step in front of a leader's lone piece is nearly a full stop.
+function blockValue(p, dest){
+  if(SAFE.has(dest)) return 0;
+  let s=0;
+  for(const t of game.tokens){
+    if(t.seat===p || t.state!=='track') continue;
+    const dist=(dest - t.trackIdx + 52)%52;          // wall sits this many squares ahead of them
+    if(dist>=1 && dist<=6) s += (7-dist) * (0.5 + winThreat(t.seat)*2.5);
+  }
+  return s;
 }
 function aiPick(p, pairs){
   const A = aiProfile();
@@ -1060,25 +1118,33 @@ function aiScore(p, act, willCapture){
   if(act.type==='enter'){
     let s = 26 + jitter;
     if(willCapture) for(const v of actionCaptureVictims(game.tokens, p, act))
-      s += A.capture + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);
+      s += captureValue(A, v);
+    s += threatAt(p, START[p]) * A.hunt;             // deploying onto a square that menaces enemies
     return s;
   }
   const tok = tokenById(act.t);
   const last = act.path[act.path.length-1];
   const relNow = tok.state==='track' ? relOf(p,tok.trackIdx) : 51+tok.homeIdx;
   let s = jitter + relNow*0.1;                       // slight bias: advance the leader
-  if(last.kind==='done') return s+42;
+  if(last.kind==='done'){                            // a finish that empties the board WINS — always take it
+    if(tokensOf(p).every(t=>t.id===tok.id || t.state==='done')) return 1e6;
+    return s+42;
+  }
   if(last.kind==='home') return s + (tok.state==='track'?26:10) + last.h;
   const dest = last.idx;
   if(willCapture) for(const v of actionCaptureVictims(game.tokens, p, act))
-    s += A.capture + relOf(v.seat, v.trackIdx)*0.25 + (settings.prisoner?12:0);  // jailing hurts more
+    s += captureValue(A, v);
   if(tok.state==='track') s += dangerAt(p, tok.trackIdx)*A.flee;   // fleeing danger
+  s += threatAt(p, dest) * A.hunt;                                 // park within striking range of enemies
   const dNew = dangerAt(p, dest);
   s -= dNew*A.avoid + (dNew>0 ? (relNow+act.path.length)*0.15 : 0);
   if(settings.wall){
     const own = tokensAtTrack(game.tokens, dest, tok).filter(t=>t.seat===p);
-    if(own.length===1) s += A.wall;                  // forming a wall
-    if(tok.state==='track' && tokensAtTrack(game.tokens, tok.trackIdx, tok).some(t=>t.seat===p)) s -= A.wall*0.43; // breaking one
+    if(own.length>=1) s += A.wall + blockValue(p, dest)*A.hunt;       // forming/extending a wall that pens enemies in
+    if(tok.state==='track' && tokensAtTrack(game.tokens, tok.trackIdx, tok).some(t=>t.seat===p)){
+      // breaking a wall is costlier when it's the one penning the leader
+      s -= A.wall*0.43 + blockValue(p, tok.trackIdx)*A.hunt*0.6;
+    }
   }
   return s;
 }

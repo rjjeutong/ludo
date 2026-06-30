@@ -122,16 +122,38 @@ off. Mixed-color squares (coexisting tokens) are not walls.
 
 ## AI
 
-Single-pass heuristic over `legalActions` (no search): capture, finish (+42), enter home
+Single-pass heuristic over `legalActions` (no search): win-now (a finish that empties the
+board returns `1e6` so a winning move is never passed up), capture, finish (+42), enter home
 column (+26), deploy from base (+26), free a prisoner (+30), flee threatened squares,
 avoid landing within dice-reach of opponents (scaled by progress at risk), form walls and
 avoid breaking them when the Wall rule is on. Random jitter breaks ties.
 
+**Gang up on the leader.** Beyond playing its own race, the AI actively tries to *stop
+whoever is winning* — the more so as that player nears victory. `seatProgress(seat)` is the
+fraction of a player's race completed (done tokens weighted most); `winThreat(seat)` turns
+that into a "must be stopped" urgency that spikes when a player is close to home and has few
+live tokens left (so the lone survivor of an almost-finished player is the prime target).
+Three offensive terms read it:
+- `captureValue()` — capturing a piece is worth more the more advanced it is, with a
+  near-home kicker, *plus* a bonus scaled by the victim's `winThreat`. The leader gets hunted.
+- `threatAt(p, absIdx)` — the offensive mirror of `dangerAt`: resting 1–6 squares **behind**
+  a track enemy (so a future roll could capture it) scores points, amplified by the prey's
+  `winThreat`. This is the *ambush* — the AI parks within striking range and waits for the
+  front-runner to come into reach instead of always racing ahead.
+- `blockValue(p, dest)` — value of resting a **wall** (2+ of its tokens) on a square: it
+  denies each enemy ahead the die rolls that would land on or cross it (rolls `dist..6`),
+  weighted hard toward the leader. A wall one step in front of a leader's lone piece is
+  nearly a full stop, and the AI is reluctant to break a wall that's penning the leader in.
+  A player walled in with no legal move is auto-skipped by `beginDispatch` (empty `allowed`
+  → end turn with a "no moves left" toast) — no special-casing needed.
+
 **Difficulty** (`settings.difficulty`, default `medium`) only tunes how *well* the AI
 plays — never the dice, which are a fair `1 + floor(random*6)` for every seat. `AI_PROFILES`
-scales the capture/flee/avoid/wall weights and the jitter; `easy` also has a `blunder`
-chance to pick a random *legal* move outright. `aiProfile()` reads the active profile each
-decision. AI pacing is snappy: ~450 ms before rolling, ~250 ms before each move.
+scales the capture/flee/avoid/wall/hunt weights and the jitter; `hunt` (0 easy / 2 medium /
+3 hard) gates the offensive threat + wall-blocking terms, so only medium and hard gang up.
+`easy` also has a `blunder` chance to pick a random *legal* move outright. `aiProfile()`
+reads the active profile each decision. AI pacing is snappy: ~450 ms before rolling, ~250 ms
+before each move.
 
 ## Online multiplayer (Firebase)
 
