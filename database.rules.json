@@ -1,0 +1,57 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "auth != null",
+
+        ".write": "auth != null && (!$room.beginsWith('ludo-') || (!data.exists() && newData.child('host').val() === auth.uid) || data.child('host').val() === auth.uid)",
+
+        "players": {
+          "$seat": {
+            ".write": "auth != null && $room.beginsWith('ludo-') && ((!data.exists() && newData.val() === auth.uid && data.parent().parent().child('ctl').child($seat).val() === 'human' && data.parent().parent().child('status').val() === 'waiting') || (data.val() === auth.uid && (!newData.exists() || newData.val() === auth.uid)))"
+          }
+        },
+
+        "members": {
+          "$uid": {
+            ".write": "auth != null && $room.beginsWith('ludo-') && $uid === auth.uid",
+            ".validate": "!$room.beginsWith('ludo-') || newData.isNumber()"
+          }
+        },
+
+        "names": {
+          "$seat": {
+            ".write": "auth != null && $room.beginsWith('ludo-') && ((data.parent().parent().child('players').child($seat).val() === auth.uid) || (!newData.exists() && !data.parent().parent().child('players').child($seat).exists()))",
+            ".validate": "!$room.beginsWith('ludo-') || (newData.isString() && newData.val().length <= 16)"
+          }
+        },
+
+        "status": {
+          ".write": "auth != null && $room.beginsWith('ludo-') && newData.val() === 'abandoned' && data.parent().child('members').child(auth.uid).exists()"
+        },
+
+        "rematch": {
+          "$seat": {
+            ".write": "auth != null && $room.beginsWith('ludo-') && newData.val() === true && data.parent().parent().child('players').child($seat).val() === auth.uid"
+          }
+        },
+
+        "events": {
+          "$gid": {
+            "$evt": {
+              ".write": "auth != null && $room.beginsWith('ludo-') && !data.exists() && newData.child('uid').val() === auth.uid && data.parent().parent().parent().child('members').child(auth.uid).exists()",
+              ".validate": "!$room.beginsWith('ludo-') || (newData.hasChildren(['k','seat','uid','ts']) && (newData.child('k').val() === 'roll' || newData.child('k').val() === 'act') && newData.child('seat').isNumber() && newData.child('seat').val() >= 0 && newData.child('seat').val() <= 3 && newData.child('ts').isNumber())"
+            }
+          }
+        },
+
+        "messages": {
+          "$msg": {
+            ".write": "auth != null && $room.beginsWith('ludo-') && !data.exists() && newData.child('uid').val() === auth.uid && data.parent().parent().child('members').child(auth.uid).exists()",
+            ".validate": "!$room.beginsWith('ludo-') || (newData.hasChildren(['seat','text','ts','uid']) && newData.child('seat').isNumber() && newData.child('text').isString() && newData.child('text').val().length <= 200 && newData.child('ts').isNumber())"
+          }
+        }
+      }
+    }
+  }
+}

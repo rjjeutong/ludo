@@ -22,7 +22,7 @@ Debug hook: `window.__ludo` exposes `game`, `settings`, `newGame()`, `legalActio
 | Game state | `game{order, turn, tokens, dice, selDie, dieChosen, undoStack, phase, allowed, mustCapture, gen, winner}`; token = `{id, seat, slot, state, trackIdx, homeIdx, heldBy}` |
 | Rules engine | `pathFor()`, `legalActionsFor()`, `isWallCell()`, `finalCaptures()`, `applySim()` — explicit-state (first arg is a tokens array) so they run on clones for simulation |
 | Dispatch search | `bestOutcome()` DFS over dice-dispatch sequences on cloned state, returning lexicographic `(dicePlayed, finalCaptureFlag)`; `computeAllowed()` keeps only `{die, act}` first moves that still reach that best. Real captures are applied at end of turn by `resolveTurnCaptures()` |
-| Turn engine | `idle → rolling (repeat while 6s) → dispatch (one die at a time) → animating → next turn`; all timers go through `later()`, which no-ops if `game.gen` changed (so New Game can't be corrupted by stale callbacks) |
+| Turn engine | `idle → rolling (repeat while 6s) → dispatch (one die at a time) → animating → next turn`; all timers go through `later()`, which queues into `timers[]` — drained by the rAF loop while visible and by a Web Worker tick (250 ms) while the tab is hidden, because background tabs stop rAF and throttle `setTimeout` (a backgrounded host must never stall the online table's AI). `animate()`/`pumpTimers()` complete slides instantly while hidden. Queued timers still no-op if `game.gen` changed |
 | AI | heuristic scorer over allowed pairs (`aiScore`/`aiPick`), tuned per `settings.difficulty` via `AI_PROFILES` (easy/medium/hard) |
 | Sound | Web Audio oscillator synth (`tone()` + `sfx` presets), no audio files |
 | Rendering | `draw()` on a continuous rAF loop; token slide animation steps cell-by-cell |
@@ -164,19 +164,32 @@ board.
 
 - **Backend:** reuses the Checkers Firebase project (its web config is public client config).
   Ludo rooms live under `rooms/ludo-<code>` — a separate keyspace from Checkers' own
-  `rooms/<code>`, so the existing `rooms/$c` rule (`auth!=null` read/write) already covers
-  them and nothing collides. Anonymous auth, no sign-up.
+  `rooms/<code>`, so nothing collides. Anonymous auth, no sign-up. `database.rules.json`
+  (repo root) is the RTDB ruleset to paste into the Firebase console: ludo rooms get
+  create-only room writes (host-owned), per-seat claims, membership-gated events/chat with
+  shape validation and a rules-pinned `uid` field; non-`ludo-` rooms keep the old
+  open-to-auth behaviour so Checkers is unaffected.
 - **Drive model:** `online`, `isHost`, `mySeat` globals. `drivenByMe(seat)` = my own seat,
   plus AI seats if I'm the host. `aiDrivenByMe(seat)` gates auto-roll/auto-move;
   `myInteractiveTurn()` gates human input. Offline, all helpers fall through to the original
   behaviour (every seat driven locally).
 - **Lobby:** host picks table size (2–4 active corners via `ACTIVE_SEATS`) and how many of
   those are AI; the rest are human slots. Room doc holds `seats`, `ctl` (human/ai per seat),
-  `players` (seat→uid), shared `rules`, `status`, `game.id`. Host claims the first seat;
-  joiners claim the next empty human seat; host hits Start when all human slots are filled.
-- **Sync:** `netSend()` pushes `{k:'roll',seat,v}` / `{k:'act',seat,type,t,die}` to
-  `events/g<id>`; the `child_added` listener ignores events for seats *I* drive (already
-  applied locally) and queues the rest. `pumpRemote()` applies the next queued event only
+  `players` (seat→uid), `members` (uid→seat, what the security rules key off), `names`
+  (seat→display name typed on the online screen; optional, ≤16 chars, remembered in
+  localStorage `ludo-name`), shared `rules`, `status`, `game.id`. `playerName(seat)` feeds
+  names into `seatName()` (roster/banner/toasts/win screen), the lobby, and chat labels —
+  always HTML-escaped via `esc()` wherever they land in innerHTML. `createRoom` picks the 4-digit code with a transaction
+  (retrying on collision — never overwrites a live room); joiners claim the first empty
+  human seat with a per-seat transaction (`joinRoom`), so simultaneous joins can't both get
+  the same seat. Host hits Start when all human slots are filled. Game-affecting settings
+  (seat, AI count, tokens, difficulty, wall, prisoner) are locked while `online`
+  (`lockedOnline()`) — changing them locally would desync the lockstep engines.
+- **Sync:** `netSend()` pushes `{k:'roll',seat,v,uid,ts}` / `{k:'act',seat,type,t,die,uid,ts}`
+  to `events/g<id>`; the `child_added` listener drops anything that fails `validEvent()`
+  (shape check + the event's `uid` must be the uid that owns that seat — `roomData.players[seat]`,
+  or `roomData.host` for AI seats; the rules pin `uid` to the authenticated writer), then
+  ignores events for seats *I* drive (already applied locally) and queues the rest. `pumpRemote()` applies the next queued event only
   when the local engine is at the matching phase (idle for a roll, dispatch for an act), so
   animations stay ordered. `applyRemoteAct()` reconstructs the move's path via
   `legalActionsFor` (deterministic — state is in lockstep). The host drives AI seats and
@@ -184,12 +197,21 @@ board.
   it's deterministic from the inputs. **Undo is offline-only** (can't unsend a move).
 - **Rematch:** each human flags `rematch/<seat>`; once all human seats have flagged it the
   host bumps `game/id` and clears the flags; every client restarts on the id change.
-- **Disconnect:** each client sets `onDisconnect().update({status:'abandoned'})`; any drop
-  flips the room and the others show "a player left — the game ended".
+- **Disconnect (presence):** a `.info/connected` watcher (`armPresence`/`refreshPresence`)
+  arms stage-appropriate `onDisconnect` ops. **Lobby** (`status:'waiting'`): a drop only
+  frees the seat (`players/<seat>` + `members/<uid>` removed) — a locked phone must never
+  brick the room — and on reconnect the client re-claims its seat by transaction.
+  **Playing:** a drop still flips `status:'abandoned'` and the others see "a player left".
+  Leaving deliberately mirrors this: `netLeave()` frees just the seat for a lobby joiner,
+  abandons the room otherwise; `newGame()` calls it too, so a local New Game can no longer
+  strand the table silently. A lobby joiner whose room is closed under them gets
+  "The room was closed." (`listenRoom`'s abandoned branch).
 - **Chat:** `messages` is a persistent push feed (survives rematches). `attachChat()` shows
-  the chat card and subscribes once per room; `sendChatMsg()` pushes `{seat,text,ts}`;
-  `appendChatMsg()` renders each line labelled by the sender's color ("You" for `mySeat`),
-  with the body added as a text node (no HTML injection).
+  the chat card and subscribes once per room via `limitToLast(100)`; `sendChatMsg()` pushes
+  `{seat,text,ts,uid}`; incoming messages are dropped unless `seat` is a valid seat index and
+  `text` is a string (re-truncated to 200 chars). `appendChatMsg()` renders each line
+  labelled by the sender's color ("You" for `mySeat`), with the body added as a text node
+  (no HTML injection).
 - Firebase compat SDK (app/database/auth) is loaded from CDN in `<head>`. To use a dedicated
   Ludo project instead, swap `FIREBASE_CONFIG`.
 

@@ -378,7 +378,7 @@ footer a{color:var(--text-dim)}
   </aside>
 </main>
 
-<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 18</span></footer>
+<footer>First to bring all tokens home wins · captures are mandatory · <a href="#" id="rulesLink">rules</a> · <span style="opacity:.55">build 19</span></footer>
 <div id="toast"></div>
 
 <!-- settings -->
@@ -466,6 +466,11 @@ footer a{color:var(--text-dim)}
 
     <!-- pick -->
     <div class="ol-screen" id="olPick">
+      <div style="margin-bottom:14px;text-align:left">
+        <label class="sub" for="olNameInput" style="display:block;margin:0 0 6px">Your name (shown to the other players)</label>
+        <input id="olNameInput" maxlength="16" autocomplete="nickname" placeholder="Anonymous"
+               style="width:100%;font-size:16px;padding:10px 12px;border-radius:12px;border:1px solid var(--line,#3a356b);background:rgba(255,255,255,.06);color:inherit;box-sizing:border-box">
+      </div>
       <div class="actions" style="justify-content:center;flex-wrap:wrap">
         <button class="btn" id="olCreateBtn">Create a room</button>
         <button class="btn ghost" id="olJoinScreenBtn">Join with a code</button>
@@ -635,8 +640,31 @@ const game = {
   winner:null,
   gen:0,             // bumped by newGame so stale timers can't touch a fresh game
 };
-// schedule a callback that dies silently if a new game started meanwhile
-function later(fn, ms){ const g=game.gen; setTimeout(()=>{ if(g===game.gen) fn(); }, ms); }
+// schedule a callback that dies silently if a new game started meanwhile.
+// Timers live in a queue drained by the rAF loop while the tab is visible and by
+// a Web Worker tick while it's hidden — background tabs stop rAF and throttle
+// setTimeout, which used to stall the turn engine (and, online, freeze the whole
+// table whenever the host tabbed away mid-AI-turn).
+const timers=[];
+function later(fn, ms){ timers.push({at:performance.now()+ms, fn, g:game.gen}); }
+function pumpTimers(){
+  const now=performance.now();
+  for(let guard=0; guard<64; guard++){
+    let idx=-1;
+    for(let i=0;i<timers.length;i++)
+      if(timers[i].at<=now && (idx===-1 || timers[i].at<timers[idx].at)) idx=i;
+    if(idx===-1) break;
+    const t=timers.splice(idx,1)[0];
+    if(t.g===game.gen) t.fn();
+  }
+  // hidden tab: no frames are drawn, so complete any in-flight slide immediately
+  if(document.hidden && anim){ const a=anim; anim=null; a.done && a.done(); }
+}
+(()=>{ try{
+  const w=new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),250)'],{type:'text/javascript'})));
+  w.onmessage=()=>pumpTimers();
+}catch(e){} })();
+setInterval(pumpTimers, 1000);   // backstop if the worker is unavailable — extra pumps are no-ops
 const seatActive = p => game.order.includes(p);
 const curSeat = ()=> game.order[game.turn];
 // Seat controllers: 'human' | 'ai' (same on every client). Online adds a network
@@ -655,7 +683,7 @@ const myInteractiveTurn = ()=> online ? (curSeat()===mySeat) : !isAI(curSeat());
 // pumpRemote() / netSend() are declared in the Online section below (hoisted).
 
 function newGame(){
-  if(online) cleanupOnline();              // a local New Game leaves any online room
+  if(online){ netLeave(); cleanupOnline(); }   // a local New Game leaves any online room — tell the others
   online=false; isHost=false; mySeat=null;
   const h = [0,1,2,3].includes(settings.humanSeat) ? settings.humanSeat : 0;
   const layout = {1:[h,(h+2)%4], 2:[h,(h+1)%4,(h+2)%4], 3:[0,1,2,3]}[settings.aiCount];
@@ -1484,6 +1512,7 @@ function drawAnim(now){
   }
 }
 function animate(tok, pts, done){
+  if(document.hidden){ done && done(); return; }   // no frames while hidden — don't stall the turn
   anim={tok, pts, seg:0, t0:performance.now(), done};
 }
 function ping(pt,color){ effects.push({x:pt.x,y:pt.y,color,t0:performance.now()}); }
@@ -1491,7 +1520,13 @@ function hexA(hex,a){
   const n=parseInt(hex.slice(1),16);
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
 }
-function loop(now){ draw(now); requestAnimationFrame(loop); }
+let lastFrame=0;
+function loop(now){
+  // full rate only while something moves; ~30fps is plenty for the idle pulse
+  if(anim || effects.length || now-lastFrame>=33){ draw(now); lastFrame=now; }
+  pumpTimers();
+  requestAnimationFrame(loop);
+}
 
 /* ---------- input ---------- */
 function pairForToken(tokId){
@@ -1562,7 +1597,15 @@ function setDieFace(v){
   const pips=dieEl.children;
   for(let i=0;i<9;i++) pips[i].classList.toggle('on', PIP_MAP[v].includes(i));
 }
-const seatName = p => ((online ? p===mySeat : controllers[p]==='human') ? 'You' : SEATS[p].label);
+// name a human typed for their seat (online only), or null → color label fallback
+function playerName(p){
+  if(online && roomData && roomData.names && typeof roomData.names[p]==='string' && controllers[p]==='human')
+    return roomData.names[p].slice(0,16);
+  return null;
+}
+const seatName = p => ((online ? p===mySeat : controllers[p]==='human') ? 'You' : (playerName(p) || SEATS[p].label));
+// names come from other clients — escape wherever they land in innerHTML
+const esc = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function updateDie(){
   const humanIdle = game.phase==='idle' && myInteractiveTurn() && game.winner==null;
   rollBtn.disabled = !humanIdle;
@@ -1616,7 +1659,7 @@ function updateRoster(){
     row.style.setProperty('--pc', SEATS[p].main);
     const minis = tokensOf(p).map(t=>`<i class="${t.state}"></i>`).join('');
     const held = jailedBy(p).length;
-    row.innerHTML=`<span class="dot"></span><span class="pname">${seatName(p)}</span>
+    row.innerHTML=`<span class="dot"></span><span class="pname">${esc(seatName(p))}</span>
       <span class="mini">${minis}</span>
       ${held?`<span class="jailbadge" title="prisoners held">⛓${held}</span>`:''}
       <span class="think"><b></b><b></b><b></b></span>`;
@@ -1635,7 +1678,7 @@ function hideOverlay(o){ o.classList.remove('show'); }
 function showWin(){
   const p=game.winner, won = online ? p===mySeat : controllers[p]==='human';
   document.getElementById('winEmoji').textContent = won?'🏆':'🎪';
-  document.getElementById('winTitle').textContent = won?'Victory!':`${SEATS[p].label} wins`;
+  document.getElementById('winTitle').textContent = won?'Victory!':`${playerName(p)||SEATS[p].label} wins`;
   document.getElementById('winName').textContent = won
     ? 'All of your tokens made it home. Take a bow!'
     : 'Better luck next round — the carnival never sleeps.';
@@ -1660,8 +1703,11 @@ function syncSettingsUI(){
   [...diffSeg.children].forEach(b=>b.classList.toggle('sel', b.dataset.d===settings.difficulty));
   document.getElementById('optSound').checked=settings.sound;
 }
+// online: seats and rules come from the room — changing them locally would
+// either desync the lockstep engines or silently strand the table
+function lockedOnline(){ if(!online) return false; toast('Locked during online play — leave the table first'); return true; }
 seatSeg.addEventListener('click', e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button'); if(!b || lockedOnline()) return;
   const s=+b.dataset.s;
   if(s===settings.humanSeat) return;
   settings.humanSeat=s; saveSettings(); syncSettingsUI();
@@ -1674,27 +1720,28 @@ themeSeg.addEventListener('click', e=>{
   applyTheme(); toast(`${THEMES[settings.theme].label} theme`);
 });
 aiSeg.addEventListener('click', e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button'); if(!b || lockedOnline()) return;
   const n=+b.dataset.n;
   if(n===settings.aiCount) return;
   settings.aiCount=n; saveSettings(); syncSettingsUI();
   newGame(); toast(`New game — you vs ${n} AI`);
 });
 tokSeg.addEventListener('click', e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button'); if(!b || lockedOnline()) return;
   const n=+b.dataset.n;
   if(n===settings.tokenCount) return;
   settings.tokenCount=n; saveSettings(); syncSettingsUI();
   newGame(); toast(`New game — ${n} tokens each`);
 });
 diffSeg.addEventListener('click', e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button'); if(!b || lockedOnline()) return;
   if(b.dataset.d===settings.difficulty) return;
   settings.difficulty=b.dataset.d; saveSettings(); syncSettingsUI();   // applies immediately, no new game
   toast(`Difficulty: ${b.dataset.d}`);
 });
 undoBtn.addEventListener('click', undoMove);
 document.getElementById('optPrisoner').addEventListener('change', e=>{
+  if(online){ e.target.checked=settings.prisoner; lockedOnline(); return; }
   settings.prisoner=e.target.checked; saveSettings();
   if(!settings.prisoner){
     let freed=0;
@@ -1705,6 +1752,7 @@ document.getElementById('optPrisoner').addEventListener('change', e=>{
   toast(`Prisoner rule ${settings.prisoner?'ON':'OFF'}`);
 });
 document.getElementById('optWall').addEventListener('change', e=>{
+  if(online){ e.target.checked=settings.wall; lockedOnline(); return; }
   settings.wall=e.target.checked; saveSettings();
   toast(`Wall rule ${settings.wall?'ON':'OFF'}`);
 });
@@ -1744,7 +1792,8 @@ const FIREBASE_CONFIG = {
 };
 const ACTIVE_SEATS = {2:[0,2], 3:[0,1,2], 4:[0,1,2,3]};   // which corners are in play
 let _fbApp=null,_fbDb=null,_fbAuth=null,myUid=null;
-let roomRef=null, roomListener=null, eventsRef=null, eventsListener=null, chatRef=null, chatListener=null;
+let roomRef=null, roomListener=null, eventsRef=null, eventsListener=null, chatRef=null, chatQuery=null, chatListener=null;
+let connRef=null, connListener=null;         // .info/connected watcher (presence)
 let roomData=null, gameIdOnline=0, roomCode=null;
 let remoteQueue=[];                          // buffered roll/act events for seats I don't drive
 const olCfg={size:4, ai:0};
@@ -1757,6 +1806,13 @@ function initFirebase(){
 }
 async function signIn(){ if(myUid) return myUid; const r=await _fbAuth.signInAnonymously(); myUid=r.user.uid; return myUid; }
 const roomPath = code => 'rooms/ludo-'+code;
+// The display name typed on the online screen — remembered on this device.
+let myNameVal='';
+function grabName(){
+  myNameVal=(document.getElementById('olNameInput').value||'').trim().slice(0,16);
+  try{ localStorage.setItem('ludo-name', myNameVal); }catch(e){}
+  return myNameVal;
+}
 
 /* ---- overlay screen helpers ---- */
 function olScreen(name){ ['Pick','Create','Join','Lobby','Msg'].forEach(s=>{ document.getElementById('ol'+s).style.display = (s.toLowerCase()===name)?'':'none'; }); }
@@ -1786,20 +1842,30 @@ async function createRoom(){
   olMsg('Creating room…');
   try{
     const uid=await signIn();
-    const code=String(Math.floor(1000+Math.random()*9000));
+    const name=grabName();
     const seats=ACTIVE_SEATS[olCfg.size];
     const humansNeeded=olCfg.size-olCfg.ai;
-    const ctl={}, players={};
+    const ctl={}, players={}, members={}, names={};
     seats.forEach((s,i)=>{ ctl[s] = i<humansNeeded ? 'human' : 'ai'; });
     players[seats[0]]=uid;                               // host takes the first seat
+    members[uid]=seats[0];                               // uid→seat map (security rules key off it)
+    if(name) names[seats[0]]=name;
     const data={ host:uid, status:'waiting', createdAt:Date.now(),
-      size:olCfg.size, ai:olCfg.ai, seats, ctl, players,
+      size:olCfg.size, ai:olCfg.ai, seats, ctl, players, members, names,
       rules:{ tokenCount:settings.tokenCount, wall:settings.wall, prisoner:settings.prisoner, difficulty:settings.difficulty },
       game:{id:1} };
-    roomRef=_fbDb.ref(roomPath(code));
-    await roomRef.set(data);
-    roomRef.onDisconnect().update({status:'abandoned'});
+    // pick a code atomically — never overwrite someone else's live room
+    let code=null, ref=null;
+    for(let tries=0; tries<8 && code==null; tries++){
+      const c=String(Math.floor(1000+Math.random()*9000));
+      ref=_fbDb.ref(roomPath(c));
+      const res=await ref.transaction(cur => cur===null ? data : undefined);
+      if(res.committed) code=c;
+    }
+    if(code==null){ olMsg('Could not get a free room code — please try again.', true); return; }
+    roomRef=ref;
     online=true; isHost=true; roomCode=code; mySeat=seats[0];
+    armPresence();
     document.getElementById('olCodeDisplay').textContent=code;
     document.getElementById('olCodeWrap').style.display='';
     listenRoom();
@@ -1817,17 +1883,63 @@ async function joinRoom(){
     const ref=_fbDb.ref(roomPath(code));
     const snap=await ref.once('value'); const d=snap.val();
     if(!d || d.status!=='waiting'){ olMsg('Room not found or already started.', true); return; }
-    // claim the first empty human seat
-    const seat = d.seats.find(s => d.ctl[s]==='human' && !(d.players&&d.players[s]));
-    if(seat===undefined){ olMsg('That room is already full.', true); return; }
+    // claim the first empty human seat via transaction — two people joining at
+    // once used to overwrite each other and leave one of them seatless
+    let seat=null;
+    for(const s of d.seats){
+      if(d.ctl[s]!=='human') continue;
+      const r=await ref.child('players/'+s).transaction(cur => (cur===null||cur===uid) ? uid : undefined);
+      if(r.committed && r.snapshot.val()===uid){ seat=s; break; }
+    }
+    if(seat==null){ olMsg('That room is already full.', true); return; }
+    await ref.child('members/'+uid).set(seat);
+    const name=grabName();
+    if(name) await ref.child('names/'+seat).set(name);
+    else ref.child('names/'+seat).remove();              // clear a previous occupant's name
     online=true; isHost=false; roomCode=code; mySeat=seat;
     roomRef=ref;
-    await ref.child('players/'+seat).set(uid);
-    roomRef.onDisconnect().update({status:'abandoned'});
+    armPresence();
     document.getElementById('olCodeWrap').style.display='none';
     listenRoom();
     olScreen('lobby');
   }catch(e){ olMsg('Error: '+e.message, true); }
+}
+
+/* ---- presence: free the seat while waiting; abandon the room once playing ---- */
+function armPresence(){
+  disarmPresence();
+  connRef=_fbDb.ref('.info/connected');
+  connListener=connRef.on('value', s=>{ if(s.val()===true) refreshPresence(); });
+}
+function disarmPresence(){ if(connRef && connListener) connRef.off('value', connListener); connRef=connListener=null; }
+// (Re)arm the right onDisconnect for the current stage. In the lobby a dropped
+// connection (locked phone, wifi blip) only frees this seat — it must never
+// brick the room for everyone else. Once the game is playing, a drop still
+// abandons the room (no mid-game rejoin yet).
+function refreshPresence(){
+  if(!roomRef || mySeat==null) return;
+  roomRef.onDisconnect().cancel();          // clears queued ops here and below
+  if(gameIdOnline>0 || (roomData && roomData.status==='playing')){
+    roomRef.onDisconnect().update({status:'abandoned'});
+  } else {
+    roomRef.child('players/'+mySeat).onDisconnect().remove();
+    roomRef.child('members/'+myUid).onDisconnect().remove();
+    roomRef.child('names/'+mySeat).onDisconnect().remove();
+    // after a transient drop the server freed the seat — take it back
+    roomRef.child('players/'+mySeat).transaction(cur => (cur===null||cur===myUid) ? myUid : undefined);
+    roomRef.child('members/'+myUid).set(mySeat);
+    if(myNameVal) roomRef.child('names/'+mySeat).set(myNameVal);
+  }
+}
+// Tell the room I'm leaving. In the lobby a joiner just frees their seat;
+// the host leaving (or anyone leaving mid-game) abandons the room.
+function netLeave(){
+  if(!roomRef) return;
+  if(gameIdOnline===0 && !isHost && roomData && roomData.status==='waiting'){
+    roomRef.child('players/'+mySeat).remove();
+    roomRef.child('members/'+myUid).remove();
+    roomRef.child('names/'+mySeat).remove();
+  } else roomRef.update({status:'abandoned'});
 }
 
 /* ---- lobby: watch the room fill, then start ---- */
@@ -1836,7 +1948,14 @@ function listenRoom(){
   roomListener=roomRef.on('value', snap=>{
     const d=snap.val(); if(!d) return;
     roomData=d;
-    if(d.status==='abandoned' && game.winner==null && gameIdOnline>0){ onlineEnded('A player left — the game ended.'); return; }
+    if(d.status==='abandoned'){
+      if(gameIdOnline>0){ if(game.winner==null) onlineEnded('A player left — the game ended.'); }
+      else {                                   // still in the lobby: the room was closed under us
+        cleanupOnline(); online=false; isHost=false; mySeat=null;
+        olMsg('The room was closed.', true);
+      }
+      return;
+    }
     const humanSeats=d.seats.filter(s=>d.ctl[s]==='human');
     const allHere=humanSeats.every(s=>d.players && d.players[s]);
     if(onlineOverlay.classList.contains('show')){
@@ -1861,7 +1980,10 @@ function renderLobbySeats(d){
     const dot=`<span style="width:13px;height:13px;border-radius:50%;background:${SEATS[s].main};display:inline-block"></span>`;
     let who;
     if(d.ctl[s]==='ai') who='Computer';
-    else if(d.players && d.players[s]) who = (s===mySeat?'You':'Player')+' ✓';
+    else if(d.players && d.players[s]){
+      const nm = s===mySeat ? 'You' : (d.names && typeof d.names[s]==='string' ? d.names[s].slice(0,16) : 'Player');
+      who = esc(nm)+' ✓';
+    }
     else who='<span style="opacity:.6">waiting…</span>';
     row.innerHTML=`${dot}<b style="min-width:70px">${SEATS[s].label}</b><span>${who}</span>`;
     wrap.appendChild(row);
@@ -1879,11 +2001,18 @@ function startOnlineGame(d){
   // adopt the host's rules so every client's engine behaves identically
   settings.tokenCount=d.rules.tokenCount; settings.wall=d.rules.wall;
   settings.prisoner=d.rules.prisoner; settings.difficulty=d.rules.difficulty;
+  document.getElementById('optPrisoner').checked=settings.prisoner;   // reflect the room's rules
+  document.getElementById('optWall').checked=settings.wall;           // (toggles are locked online)
   controllers.length=0;
   for(let p=0;p<4;p++) controllers[p]=null;
   for(const s of d.seats) controllers[s]=d.ctl[s];       // 'human' | 'ai'
-  // roles alternate by game-id parity so the first-move seat rotates on rematch
-  mySeat = +Object.keys(d.players).find(s=>d.players[s]===myUid);
+  const myKey = Object.keys(d.players||{}).find(s=>d.players[s]===myUid);
+  if(myKey===undefined){                     // seat lost (e.g. reclaimed while disconnected)
+    onlineEnded('Your seat was lost — please start or join a new room.');
+    return;
+  }
+  mySeat = +myKey;
+  refreshPresence();                         // switch onDisconnect from seat-free to room-abandon
   game.order = d.seats.slice();                          // ascending = clockwise, host (seat 0) first
   game.tokens=[];
   for(const p of game.order)
@@ -1899,16 +2028,34 @@ function startOnlineGame(d){
   startTurn();
   toast(`Online game on — you are ${SEATS[mySeat].label}`);
 }
+// A remote event is only trusted if it's well-formed AND written by the uid that
+// owns that seat (the host's uid for AI seats). The uid field is pinned to the
+// authenticated writer by the database rules, so it can't be spoofed.
+function expectedEventUid(seat){
+  if(!roomData) return undefined;
+  if(roomData.ctl && roomData.ctl[seat]==='ai') return roomData.host;
+  return roomData.players ? roomData.players[seat] : undefined;
+}
+function validEvent(e){
+  if(!e || typeof e!=='object') return false;
+  if(!Number.isInteger(e.seat) || e.seat<0 || e.seat>3) return false;
+  if(!e.uid || e.uid!==expectedEventUid(e.seat)) return false;
+  if(e.k==='roll') return Number.isInteger(e.v) && e.v>=1 && e.v<=6;
+  if(e.k==='act') return (e.type==='enter'||e.type==='move'||e.type==='free')
+    && typeof e.t==='string' && Number.isInteger(e.die) && e.die>=1 && e.die<=6;
+  return false;
+}
 function attachEvents(){
   if(eventsListener && eventsRef) eventsRef.off('child_added', eventsListener);
   eventsRef=roomRef.child('events/g'+gameIdOnline);
   eventsListener=eventsRef.on('child_added', snap=>{
-    const e=snap.val(); if(!e) return;
+    const e=snap.val();
+    if(!validEvent(e)) return;            // malformed or spoofed — drop it
     if(drivenByMe(e.seat)) return;        // my own event echoing back — already applied locally
     remoteQueue.push(e); pumpRemote();
   });
 }
-function netSend(e){ if(eventsRef){ e.ts=Date.now(); eventsRef.push(e); } }
+function netSend(e){ if(eventsRef){ e.uid=myUid; e.ts=Date.now(); eventsRef.push(e); } }
 function pumpRemote(){
   if(!online || !remoteQueue.length) return;
   const e=remoteQueue[0];
@@ -1943,14 +2090,19 @@ function attachChat(){
   document.getElementById('chatCard').style.display='';
   if(chatListener) return;                 // one feed per room — survives rematches
   chatRef=roomRef.child('messages');
+  chatQuery=chatRef.limitToLast(100);      // don't replay an unbounded history
   document.getElementById('chatMsgs').innerHTML='<div class="cempty">Say hi 👋</div>';
-  chatListener=chatRef.on('child_added', snap=>{ const m=snap.val(); if(m) appendChatMsg(m.seat, m.text); });
+  chatListener=chatQuery.on('child_added', snap=>{
+    const m=snap.val();
+    if(!m || !Number.isInteger(m.seat) || !SEATS[m.seat] || typeof m.text!=='string') return;
+    appendChatMsg(m.seat, m.text.slice(0,200));
+  });
 }
 function sendChatMsg(){
   const inp=document.getElementById('chatIn');
   const text=(inp.value||'').trim(); if(!text || !chatRef) return;
   inp.value='';
-  chatRef.push({ seat:mySeat, text:text.slice(0,200), ts:Date.now() });
+  chatRef.push({ seat:mySeat, text:text.slice(0,200), ts:Date.now(), uid:myUid });
 }
 function appendChatMsg(seat, text){
   const box=document.getElementById('chatMsgs');
@@ -1958,22 +2110,23 @@ function appendChatMsg(seat, text){
   const div=document.createElement('div');
   div.className='cmsg'+(seat===mySeat?' me':'');
   const who=document.createElement('b'); who.style.color=SEATS[seat].main;
-  who.textContent=(seat===mySeat?'You':SEATS[seat].label)+': ';
+  who.textContent=(seat===mySeat?'You':(playerName(seat)||SEATS[seat].label))+': ';
   div.appendChild(who);
   div.appendChild(document.createTextNode(text));   // text node = no HTML injection
   box.appendChild(div); box.scrollTop=box.scrollHeight;
 }
 function closeOnlineOverlay(){ hideOverlay(onlineOverlay); }
 function leaveOnline(){
-  if(roomRef){ roomRef.update({status:'abandoned'}); }
+  netLeave();
   cleanupOnline(); closeOnlineOverlay(); newGame();
 }
 function cleanupOnline(){
+  disarmPresence();
   if(eventsRef && eventsListener) eventsRef.off('child_added', eventsListener);
   if(roomRef && roomListener) roomRef.off('value', roomListener);
-  if(chatRef && chatListener) chatRef.off('child_added', chatListener);
+  if(chatQuery && chatListener) chatQuery.off('child_added', chatListener);
   if(roomRef) try{ roomRef.onDisconnect().cancel(); }catch(e){}
-  eventsRef=roomRef=chatRef=null; eventsListener=roomListener=chatListener=null;
+  eventsRef=roomRef=chatRef=chatQuery=null; eventsListener=roomListener=chatListener=null;
   roomData=null; gameIdOnline=0; remoteQueue=[]; roomCode=null;
   document.getElementById('chatCard').style.display='none';
   document.getElementById('chatMsgs').innerHTML='';
@@ -1999,6 +2152,7 @@ document.getElementById('chatSend').addEventListener('click', sendChatMsg);
 document.getElementById('chatIn').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); sendChatMsg(); } });
 
 /* ---------- boot ---------- */
+try{ document.getElementById('olNameInput').value = localStorage.getItem('ludo-name')||''; }catch(e){}
 document.getElementById('optPrisoner').checked = settings.prisoner;
 document.getElementById('optWall').checked = settings.wall;
 applyTheme();
